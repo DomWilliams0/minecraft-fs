@@ -3,10 +3,9 @@ use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
+use crate::filesystem::MinecraftFs;
 use fuser::BackgroundSession;
 use parking_lot::{Condvar, Mutex};
-
-use crate::filesystem::MinecraftFs;
 
 struct Mounter(BackgroundSession);
 pub struct MountStatus;
