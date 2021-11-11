@@ -1,64 +1,62 @@
-use crate::structure::registry::StructureBuilder;
-use registry::{DirEntry, EntryRef, FileEntry};
-
 mod registry;
 pub use registry::{Entry, FilesystemStructure};
 
-macro_rules! file_entry {
-    ($ty:ty, $inode:expr) => {
-        impl $ty {
-            pub const INODE: u64 = $inode;
-        }
+mod structure {
+    #![allow(clippy::module_inception)]
 
-        impl FileEntry for $ty {}
-    };
-}
+    use super::*;
+    use registry::{DirEntry, EntryRef, FileEntry, Registration};
 
-macro_rules! dir_entry {
-    ($ty:ident, $inode:expr, $children:expr) => {
-        impl $ty {
-            pub const INODE: u64 = $inode;
-        }
-
-        impl DirEntry for $ty {
-            fn children(&self) -> &'static [EntryRef] {
-                &$children
+    macro_rules! file_entry {
+        ($ty:ident, $name:expr) => {
+            struct $ty;
+            impl $ty {
+                fn entry() -> Entry {
+                    Entry::file(Self)
+                }
             }
-        }
-    };
-}
 
-pub struct RootDir;
-dir_entry!(
-    RootDir,
-    1,
-    [EntryRef::File(&TestFile), EntryRef::Dir(&TestDir)]
-);
+            impl FileEntry for $ty {}
 
-pub struct TestFile;
-file_entry!(TestFile, 2);
-
-pub struct TestDir;
-dir_entry!(TestDir, 3, []);
-
-#[allow(unused_variables)]
-fn register_all(builder: &mut StructureBuilder) {
-    // TODO register via inventory crate
-    // TODO registration macros
-
-    macro_rules! register_dir {
-        ($ty:ident, $name:expr) => {
-            builder.register($ty::INODE, $name, Entry::dir($ty));
+            inventory::submit! { Registration {
+                name: $name,
+                children: &[],
+                entry_fn: $ty::entry,
+            }}
         };
     }
 
-    macro_rules! register_file {
-        ($ty:ident, $name:expr) => {
-            builder.register($ty::INODE, $name, Entry::file($ty));
+    macro_rules! dir_entry {
+        ($vis:vis $ty:ident, $name:expr, $children:expr) => {
+            $vis struct $ty;
+
+            impl $ty {
+                fn entry() -> Entry { Entry::dir(Self) }
+            }
+
+            impl DirEntry for $ty {
+                fn children(&self) -> &'static [EntryRef] {
+                    &$children
+                }
+            }
+
+            inventory::submit! { Registration {
+                name: $name,
+                children: &$children,
+                entry_fn: $ty::entry,
+            }}
         };
     }
 
-    register_dir!(RootDir, "");
-    register_file!(TestFile, "myfile");
-    register_dir!(TestDir, "mydir");
+    dir_entry!(
+        pub Root,
+        "",
+        [EntryRef::Dir(&PlayerDir), EntryRef::Dir(&WorldDir)]
+    );
+
+    dir_entry!(PlayerDir, "player", [EntryRef::File(&PlayerHealth)]);
+    file_entry!(PlayerHealth, "health");
+
+    dir_entry!(WorldDir, "world", [EntryRef::File(&WorldName)]);
+    file_entry!(WorldName, "name");
 }

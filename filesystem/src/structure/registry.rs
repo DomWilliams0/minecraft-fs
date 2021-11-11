@@ -1,4 +1,4 @@
-use crate::structure::register_all;
+use crate::structure::structure::Root;
 use smallvec::SmallVec;
 use std::any::{Any, TypeId};
 use std::borrow::Cow;
@@ -40,13 +40,22 @@ pub trait DirEntry: Send + Sync + Any {
 
 pub trait FileEntry: Send + Sync + Any {}
 
-pub(in crate::structure) struct StructureBuilder {
+struct StructureBuilder {
     registry: HashMap<u64, FilesystemEntry>,
     ty_registry: HashMap<TypeId, u64>,
 }
 
+pub struct Registration {
+    pub name: &'static str,
+    pub children: &'static [EntryRef],
+    pub entry_fn: fn() -> Entry,
+}
+
+inventory::collect!(Registration);
+
 impl StructureBuilder {
-    pub fn register(&mut self, inode: u64, name: &'static str, instance: Entry) {
+    fn register(&mut self, inode: u64, name: &'static str, instance: Entry) {
+        log::debug!("registering inode={}, name={:?}", inode, name);
         let ty = instance.entry_typeid();
         assert!(
             self.registry
@@ -126,7 +135,25 @@ impl FilesystemStructure {
             ty_registry: HashMap::new(),
         };
 
-        register_all(&mut builder);
+        let mut inode = 2;
+        for reg in inventory::iter::<Registration> {
+            let my_inode = if reg.name.is_empty() {
+                // must be root
+                1
+            } else {
+                let curr = inode;
+                inode += 1;
+                curr
+            };
+            builder.register(my_inode, reg.name, (reg.entry_fn)());
+        }
+
+        let root = builder.registry.get(&1).expect("missing root dir");
+        assert_eq!(
+            root.entry.entry_typeid(),
+            TypeId::of::<Root>(),
+            "wrong root"
+        );
 
         builder.finish()
     }
