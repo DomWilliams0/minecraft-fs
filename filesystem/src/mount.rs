@@ -3,7 +3,7 @@ use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
-use crate::filesystem::MinecraftFs;
+use crate::fuse::MinecraftFs;
 use fuser::BackgroundSession;
 use parking_lot::{Condvar, Mutex};
 
@@ -26,7 +26,7 @@ pub fn mount(path: &Path, opts: &[&str]) -> Result<MountStatus, Box<dyn Error>> 
         .iter()
         .map(|s| OsStr::from_bytes(s.as_bytes()))
         .collect::<Vec<_>>();
-    let mnt = fuser::spawn_mount(MinecraftFs, path, &opts)?;
+    let mnt = fuser::spawn_mount(MinecraftFs::new(), path, &opts)?;
     {
         let mut guard = MOUNTER.lock();
         *guard = Some(Mounter(mnt));

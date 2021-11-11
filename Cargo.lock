@@ -84,6 +84,7 @@ dependencies = [
  "libc",
  "log",
  "parking_lot",
+ "smallvec",
 ]
 
 [[package]]
