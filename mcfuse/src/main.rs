@@ -1,6 +1,8 @@
 use std::path::Path;
 
 fn main() {
+    env_logger::init();
+
     let mnt_point = Path::new("./mnt");
     let opts = ["-o", "fsname=minecraft,rw"];
     let mnted = filesystem::mount(mnt_point, &opts).expect("mount failed");

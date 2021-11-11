@@ -16,12 +16,11 @@ static CVAR: Condvar = Condvar::new();
 pub fn mount(path: &Path, opts: &[&str]) -> Result<MountStatus, Box<dyn Error>> {
     ctrlc::set_handler(|| {
         let mut guard = MOUNTER.lock();
-        println!("unmounting");
         *guard = None;
         CVAR.notify_all();
     })?;
 
-    println!("mounting");
+    log::info!("mounting at {}", path.display());
     // TODO this is ridiculous but temporary
     let opts = opts
         .iter()
