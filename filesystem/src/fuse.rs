@@ -127,9 +127,7 @@ fn ipc_error_code(err: &IpcError) -> i32 {
     match err {
         IpcError::NoCurrentGame | IpcError::ClientError(_) => libc::EOPNOTSUPP,
         IpcError::NotFound => libc::ENOENT,
-        IpcError::Connecting(_) | IpcError::SendingCommand(_) | IpcError::ReadingResponse(_) => {
-            libc::EIO
-        }
+        IpcError::Connecting(_) | IpcError::Sending(_) | IpcError::Receiving(_) => libc::EIO,
         IpcError::UnexpectedResponse(_) => libc::EINVAL,
     }
 }

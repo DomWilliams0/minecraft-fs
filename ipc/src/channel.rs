@@ -5,10 +5,15 @@ use crate::generated::{root_as_response, Command, CommandArgs, CommandType, Erro
 use crate::ReadCommand;
 use flatbuffers::FlatBufferBuilder;
 use std::os::unix::net::UnixStream;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+const RETRIES: u8 = 2;
+
 pub struct IpcChannel {
+    sock_path: PathBuf,
     sock: UnixStream,
+    retries: u8,
 }
 
 #[derive(Debug, Error)]
@@ -19,11 +24,11 @@ pub enum IpcError {
     #[error("IO error connecting to socket: {0}")]
     Connecting(#[source] std::io::Error),
 
-    #[error("IO error sending command: {0}")]
-    SendingCommand(#[source] std::io::Error),
+    #[error("IO error writing to socket: {0}")]
+    Sending(#[source] std::io::Error),
 
-    #[error("IO error reading response: {0}")]
-    ReadingResponse(#[source] std::io::Error),
+    #[error("IO error reading from socket: {0}")]
+    Receiving(#[source] std::io::Error),
 
     #[error("Player is not currently in a game")]
     NoCurrentGame,
@@ -45,13 +50,13 @@ impl IpcChannel {
         };
 
         log::debug!("opening domain socket {}", path.display());
-        let sock = match UnixStream::connect(path) {
-            Ok(f) => f,
-            Err(err) if err.kind() == ErrorKind::NotFound => return Err(IpcError::NotFound),
-            Err(err) => return Err(IpcError::Connecting(err)),
-        };
+        let sock = Self::open_socket(&path)?;
 
-        Ok(Self { sock })
+        Ok(Self {
+            sock_path: path,
+            sock,
+            retries: RETRIES,
+        })
     }
 
     pub fn send_read(&mut self, cmd: ReadCommand) -> Result<ResponseBody, IpcError> {
@@ -79,14 +84,8 @@ impl IpcChannel {
             let data = buf.finished_data();
             let len = data.len() as u32;
             log::trace!("sending {} bytes for command {:?}", len, command);
-            self.sock
-                .write_all(&len.to_le_bytes())
-                .map_err(IpcError::SendingCommand)?;
-
-            // TODO attempt to reopen socket on failure
-            self.sock
-                .write_all(data)
-                .map_err(IpcError::SendingCommand)?;
+            self.attempt_write(&len.to_le_bytes())?;
+            self.attempt_write(data)?;
         }
 
         let resp_type = match response_type {
@@ -98,7 +97,7 @@ impl IpcChannel {
             let mut len_bytes = [0u8; 4];
             self.sock
                 .read_exact(&mut len_bytes)
-                .map_err(IpcError::ReadingResponse)?;
+                .map_err(IpcError::Receiving)?;
 
             let len = u32::from_le_bytes(len_bytes);
             log::trace!("reading {} bytes from socket", len);
@@ -106,7 +105,7 @@ impl IpcChannel {
             recv_buffer.resize(len as usize, 0);
             self.sock
                 .read_exact(&mut recv_buffer)
-                .map_err(IpcError::ReadingResponse)?;
+                .map_err(IpcError::Receiving)?;
         }
 
         let response = root_as_response(&recv_buffer).expect("bad");
@@ -140,6 +139,36 @@ impl IpcChannel {
                     })
                 }
                 _ => Err(IpcError::UnexpectedResponse(resp_type)),
+            }
+        }
+    }
+
+    fn open_socket(path: &Path) -> Result<UnixStream, IpcError> {
+        match UnixStream::connect(path) {
+            Ok(f) => Ok(f),
+            Err(err) if err.kind() == ErrorKind::NotFound => Err(IpcError::NotFound),
+            Err(err) => Err(IpcError::Connecting(err)),
+        }
+    }
+
+    fn attempt_write(&mut self, data: &[u8]) -> Result<(), IpcError> {
+        fn rebootable(kind: ErrorKind) -> bool {
+            matches!(kind, ErrorKind::BrokenPipe | ErrorKind::ConnectionRefused)
+        }
+
+        loop {
+            match self.sock.write_all(data) {
+                Ok(_) => return Ok(()),
+                Err(err) if !rebootable(err.kind()) || self.retries == 0 => {
+                    return Err(IpcError::Sending(err))
+                }
+                Err(_) => {
+                    self.retries -= 1;
+
+                    // reboot and try again
+                    log::debug!("reopening socket, {} retries remaining", self.retries);
+                    self.sock = Self::open_socket(&self.sock_path)?;
+                }
             }
         }
     }
