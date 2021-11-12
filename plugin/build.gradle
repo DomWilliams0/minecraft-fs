@@ -28,6 +28,9 @@ dependencies {
 
     // PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
     // You may need to force-disable transitiveness on them.
+
+    // https://mvnrepository.com/artifact/com.google.flatbuffers/flatbuffers-java
+    implementation group: 'com.google.flatbuffers', name: 'flatbuffers-java', version: '2.0.3'
 }
 
 processResources {

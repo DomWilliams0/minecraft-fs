@@ -1,6 +1,6 @@
 use crate::structure::{Entry, FilesystemStructure};
 use fuser::{FileAttr, FileType, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
-use ipc::IpcChannel;
+use ipc::{IpcChannel, IpcError};
 use log::*;
 use std::ffi::OsStr;
 use std::fmt::Write;
@@ -69,16 +69,16 @@ impl fuser::Filesystem for MinecraftFs {
             _ => return reply.error(libc::ENOENT),
         };
 
-        let cmd = match file.read_command() {
+        let cmd = match file.read() {
             Some(cmd) => cmd,
             None => return reply.error(libc::EOPNOTSUPP),
         };
 
-        let resp = match self.ipc.send_command(cmd) {
+        let resp = match self.ipc.send_read(cmd) {
             Ok(resp) => resp,
             Err(err) => {
                 error!("command failed: {}", err);
-                return reply.error(libc::EFAULT);
+                return reply.error(ipc_error_code(&err));
             }
         };
 
@@ -120,6 +120,18 @@ impl fuser::Filesystem for MinecraftFs {
         }
 
         reply.ok();
+    }
+}
+
+fn ipc_error_code(err: &IpcError) -> i32 {
+    match err {
+        IpcError::NoCurrentGame => libc::EOPNOTSUPP,
+        IpcError::NotFound => libc::ENOENT,
+        IpcError::Connecting(_) | IpcError::SendingCommand(_) | IpcError::ReadingResponse(_) => {
+            libc::EIO
+        }
+        IpcError::ClientError(_) => libc::EFAULT,
+        IpcError::UnexpectedResponse(_) => libc::EINVAL,
     }
 }
 

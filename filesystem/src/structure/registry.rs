@@ -1,5 +1,5 @@
 use crate::structure::structure::Root;
-use ipc::CommandType;
+use ipc::ReadCommand;
 use smallvec::SmallVec;
 use std::any::{Any, TypeId};
 use std::borrow::Cow;
@@ -40,7 +40,7 @@ pub trait DirEntry: Send + Sync + Any {
 }
 
 pub trait FileEntry: Send + Sync + Any {
-    fn read_command(&self) -> Option<CommandType>;
+    fn read(&self) -> Option<ReadCommand>;
 }
 
 struct StructureBuilder {

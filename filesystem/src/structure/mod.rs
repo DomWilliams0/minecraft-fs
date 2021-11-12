@@ -5,11 +5,11 @@ mod structure {
     #![allow(clippy::module_inception)]
 
     use super::*;
-    use ipc::CommandType;
+    use ipc::{generated::CommandType, ReadCommand, ResponseType};
     use registry::{DirEntry, EntryRef, FileEntry, Registration};
 
     macro_rules! file_entry {
-        ($ty:ident, $name:expr, read $cmd:expr) => {
+        ($ty:ident, $name:expr, read $read:expr) => {
             struct $ty;
             impl $ty {
                 fn entry() -> Entry {
@@ -18,8 +18,8 @@ mod structure {
             }
 
             impl FileEntry for $ty {
-                fn read_command(&self) -> Option<CommandType> {
-                    $cmd
+                fn read(&self) -> Option<ReadCommand> {
+                    $read
                 }
             }
 
@@ -60,7 +60,7 @@ mod structure {
     );
 
     dir_entry!(PlayerDir, "player", [EntryRef::File(&PlayerHealth)]);
-    file_entry!(PlayerHealth, "health", read Some(CommandType::PlayerHealth));
+    file_entry!(PlayerHealth, "health", read Some(ReadCommand::WithResponse(CommandType::PlayerHealth, ResponseType::Float)));
 
     dir_entry!(WorldDir, "world", []);
     // file_entry!(WorldName, "name");

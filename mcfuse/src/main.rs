@@ -1,4 +1,4 @@
-use ipc::{IpcChannel, Response};
+use ipc::IpcChannel;
 use std::path::Path;
 
 fn main() {
@@ -7,7 +7,7 @@ fn main() {
     // connect to game
     let ipc = IpcChannel::open_existing().expect("failed to connect to game");
 
-    let mnt_point = Path::new("./mnt");
+    let mnt_point = Path::new("../mnt");
     let opts = ["-o", "fsname=minecraft,rw"];
     let mnted = filesystem::mount(ipc, mnt_point, &opts).expect("mount failed");
 

@@ -1,0 +1,11 @@
+namespace MCFS;
+
+enum CommandType:int32 {
+	PlayerHealth
+}
+
+table Command {
+    cmd: CommandType;
+}
+
+root_type Command;

@@ -1,0 +1,18 @@
+namespace MCFS;
+
+enum Error:int32 {
+    Unknown,
+    UnknownCommand,
+	NoGame
+}
+
+table Response {
+	error:Error = null;
+
+	float:float = null;
+	int:int = null;
+	string:string;
+}
+
+
+root_type Response;

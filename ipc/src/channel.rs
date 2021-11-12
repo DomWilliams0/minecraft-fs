@@ -1,8 +1,9 @@
-use crate::command::{Command, Response, ResponseType};
-use crate::CommandType;
-
 use std::io::{ErrorKind, Read, Write};
 
+use crate::command::{ResponseBody, ResponseType};
+use crate::generated::{root_as_response, Command, CommandArgs, CommandType, Error};
+use crate::ReadCommand;
+use flatbuffers::FlatBufferBuilder;
 use std::os::unix::net::UnixStream;
 use thiserror::Error;
 
@@ -24,14 +25,14 @@ pub enum IpcError {
     #[error("IO error reading response: {0}")]
     ReadingResponse(#[source] std::io::Error),
 
-    #[error("Serialization error: {0}")]
-    Serialize(#[source] serde_json::Error),
+    #[error("Player is not currently in a game")]
+    NoCurrentGame,
 
-    #[error("Deserialization error: {0}")]
-    Deserialize(#[source] serde_json::Error),
+    #[error("Client error: {0}")]
+    ClientError(&'static str),
 
-    #[error("Unexpected response type, expected {0:?} but got {1:?}")]
-    BadResponse(ResponseType, serde_json::Value),
+    #[error("Expected response type {0:?} but got something else")]
+    UnexpectedResponse(ResponseType),
 }
 
 impl IpcChannel {
@@ -53,60 +54,83 @@ impl IpcChannel {
         Ok(Self { sock })
     }
 
-    pub fn send_command(&mut self, command_type: CommandType) -> Result<Response, IpcError> {
+    pub fn send_read(&mut self, cmd: ReadCommand) -> Result<ResponseBody, IpcError> {
+        let (cmd, resp) = match cmd {
+            ReadCommand::WithResponse(cmd, resp) => (cmd, Some(resp)),
+        };
+
+        self.send_command(cmd, resp)
+    }
+
+    fn send_command(
+        &mut self,
+        command: CommandType,
+        response_type: Option<ResponseType>,
+    ) -> Result<ResponseBody, IpcError> {
         // TODO reuse buffer allocation
-        let mut buf = Vec::new();
-        let command = Command { ty: command_type };
-        serde_json::to_writer(&mut buf, &command).map_err(IpcError::Serialize)?;
+        let mut recv_buffer = Vec::with_capacity(8192);
+        let mut buf = FlatBufferBuilder::with_capacity(1024);
+        {
+            let offset = Command::create(&mut buf, &CommandArgs { cmd: command });
+            buf.finish(offset, None);
+        }
 
         {
-            let len = buf.len() as u32;
+            let data = buf.finished_data();
+            let len = data.len() as u32;
             log::trace!("sending {} bytes for command {:?}", len, command);
             self.sock
-                .write_all(&len.to_be_bytes())
+                .write_all(&len.to_le_bytes())
                 .map_err(IpcError::SendingCommand)?;
 
+            // TODO attempt to reopen socket on failure
             self.sock
-                .write_all(&buf)
+                .write_all(data)
                 .map_err(IpcError::SendingCommand)?;
         }
 
-        let resp_type = match command_type.response_type() {
+        let resp_type = match response_type {
             Some(ty) => ty,
-            None => return Ok(Response::None),
+            None => return Ok(ResponseBody::None),
         };
 
-        buf.clear();
         {
             let mut len_bytes = [0u8; 4];
             self.sock
                 .read_exact(&mut len_bytes)
                 .map_err(IpcError::ReadingResponse)?;
 
-            let len = u32::from_be_bytes(len_bytes);
+            let len = u32::from_le_bytes(len_bytes);
             log::trace!("reading {} bytes from socket", len);
 
-            buf.resize(len as usize, 0);
+            recv_buffer.resize(len as usize, 0);
             self.sock
-                .read_exact(&mut buf)
+                .read_exact(&mut recv_buffer)
                 .map_err(IpcError::ReadingResponse)?;
         }
 
-        let json: serde_json::Value =
-            serde_json::from_slice(&buf).map_err(IpcError::Deserialize)?;
+        let response = root_as_response(&recv_buffer).expect("bad");
 
-        // TODO specific errors like no such player
-        log::trace!("response is {:?}", json);
-
-        match (resp_type, json) {
-            (ResponseType::Integer, serde_json::Value::Number(n)) if n.is_i64() => {
-                Ok(Response::Integer(n.as_i64().unwrap()))
+        if let Some(err) = response.error() {
+            Err(match err {
+                Error::NoGame => IpcError::NoCurrentGame,
+                _ => IpcError::ClientError(err.variant_name().unwrap()),
+            })
+        } else {
+            match (
+                resp_type,
+                response.float(),
+                response.int(),
+                response.string(),
+            ) {
+                (ResponseType::Float, Some(val), None, None) => Ok(ResponseBody::Float(val)),
+                (ResponseType::Integer, None, Some(val), None) => Ok(ResponseBody::Integer(val)),
+                // TODO dont clone string
+                (ResponseType::String, None, None, Some(val)) => {
+                    Ok(ResponseBody::String(val.to_owned()))
+                }
+                _ => Err(IpcError::UnexpectedResponse(resp_type)),
             }
-            (ResponseType::Float, serde_json::Value::Number(n)) if n.is_f64() => {
-                Ok(Response::Float(n.as_f64().unwrap()))
-            }
-            (ResponseType::String, serde_json::Value::String(s)) => Ok(Response::String(s)),
-            (expected, got) => Err(IpcError::BadResponse(expected, got)),
         }
     }
 }

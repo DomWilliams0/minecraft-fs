@@ -1,54 +1,34 @@
-use serde::Serialize;
-use std::fmt::{Display, Formatter};
+use crate::generated::CommandType;
+use std::fmt::{Debug, Display, Formatter};
 
 // TODO define as a protobuf for use in plugin/mod
 
-#[derive(Serialize, Copy, Clone, Debug)]
-#[repr(u8)]
-pub enum CommandType {
-    PlayerHealth,
-}
-
-#[derive(Serialize, Debug)]
-pub struct Command {
-    pub ty: CommandType,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum ResponseType {
     Integer,
     String,
     Float,
 }
 
-pub enum Response {
+pub enum ReadCommand {
+    WithResponse(CommandType, ResponseType),
+    // TODO WithoutResponse
+}
+
+pub enum ResponseBody {
     None,
-    Integer(i64),
-    Float(f64),
+    Integer(i32),
+    Float(f32),
     String(String),
-    Json(serde_json::Value),
 }
 
-impl CommandType {
-    pub fn response_type(&self) -> Option<ResponseType> {
-        use CommandType::*;
-        use ResponseType::*;
-        Some(match self {
-            PlayerHealth => Float,
-        })
-    }
-}
-
-impl Display for Response {
+impl Display for ResponseBody {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let display = match self {
-            Response::None => return Ok(()),
-            Response::Integer(val) => val as &dyn Display,
-            Response::Float(val) => val as &dyn Display,
-            Response::String(val) => val as &dyn Display,
-            Response::Json(val) => val as &dyn Display,
-        };
-
-        Display::fmt(display, f)
+        match self {
+            ResponseBody::None => Ok(()),
+            ResponseBody::Float(val) => Debug::fmt(val, f),
+            ResponseBody::Integer(val) => Display::fmt(val, f),
+            ResponseBody::String(val) => Display::fmt(val, f),
+        }
     }
 }
