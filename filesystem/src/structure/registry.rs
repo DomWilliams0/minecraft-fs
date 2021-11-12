@@ -1,4 +1,5 @@
 use crate::structure::structure::Root;
+use ipc::CommandType;
 use smallvec::SmallVec;
 use std::any::{Any, TypeId};
 use std::borrow::Cow;
@@ -38,7 +39,9 @@ pub trait DirEntry: Send + Sync + Any {
     fn children(&self) -> &'static [EntryRef];
 }
 
-pub trait FileEntry: Send + Sync + Any {}
+pub trait FileEntry: Send + Sync + Any {
+    fn read_command(&self) -> Option<CommandType>;
+}
 
 struct StructureBuilder {
     registry: HashMap<u64, FilesystemEntry>,

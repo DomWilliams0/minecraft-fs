@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "mcfs",
+  "version": "${version}",
+
+  "name": "MCFS",
+  "description": "Minecraft FUSE Filesystem",
+  "authors": [
+    "Dom Williams"
+  ],
+
+  "license": "MIT",
+
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "ms.domwillia.mcfs.MinecraftFsMod"
+    ]
+  },
+
+  "depends": {
+    "fabricloader": ">=0.11.3",
+    "fabric": "*",
+    "minecraft": "1.17.x",
+    "java": ">=16"
+  }
+}

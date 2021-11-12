@@ -5,10 +5,11 @@ mod structure {
     #![allow(clippy::module_inception)]
 
     use super::*;
+    use ipc::CommandType;
     use registry::{DirEntry, EntryRef, FileEntry, Registration};
 
     macro_rules! file_entry {
-        ($ty:ident, $name:expr) => {
+        ($ty:ident, $name:expr, read $cmd:expr) => {
             struct $ty;
             impl $ty {
                 fn entry() -> Entry {
@@ -16,7 +17,11 @@ mod structure {
                 }
             }
 
-            impl FileEntry for $ty {}
+            impl FileEntry for $ty {
+                fn read_command(&self) -> Option<CommandType> {
+                    $cmd
+                }
+            }
 
             inventory::submit! { Registration {
                 name: $name,
@@ -55,8 +60,8 @@ mod structure {
     );
 
     dir_entry!(PlayerDir, "player", [EntryRef::File(&PlayerHealth)]);
-    file_entry!(PlayerHealth, "health");
+    file_entry!(PlayerHealth, "health", read Some(CommandType::PlayerHealth));
 
-    dir_entry!(WorldDir, "world", [EntryRef::File(&WorldName)]);
-    file_entry!(WorldName, "name");
+    dir_entry!(WorldDir, "world", []);
+    // file_entry!(WorldName, "name");
 }

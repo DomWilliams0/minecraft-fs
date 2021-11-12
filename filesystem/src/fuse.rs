@@ -1,13 +1,16 @@
 use crate::structure::{Entry, FilesystemStructure};
-use fuser::{FileAttr, FileType, ReplyAttr, ReplyDirectory, ReplyEntry, Request};
+use fuser::{FileAttr, FileType, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
+use ipc::IpcChannel;
 use log::*;
 use std::ffi::OsStr;
+use std::fmt::Write;
 use std::time::{Duration, SystemTime};
 
 pub struct MinecraftFs {
     uid: u32,
     gid: u32,
     structure: FilesystemStructure,
+    ipc: IpcChannel,
 }
 
 // TODO this might be able to be much longer
@@ -41,6 +44,55 @@ impl fuser::Filesystem for MinecraftFs {
         reply.attr(&TTL, &attr);
     }
 
+    fn read(
+        &mut self,
+        _req: &Request<'_>,
+        ino: u64,
+        fh: u64,
+        offset: i64,
+        size: u32,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        reply: ReplyData,
+    ) {
+        // TODO actually check readability in fh, which requires implementing open()
+        trace!(
+            "read(inode={}, fh={}, offset={}, size={})",
+            ino,
+            fh,
+            offset,
+            size
+        );
+
+        let file = match self.structure.lookup_inode(ino) {
+            Some(Entry::File(f)) => &**f,
+            _ => return reply.error(libc::ENOENT),
+        };
+
+        let cmd = match file.read_command() {
+            Some(cmd) => cmd,
+            None => return reply.error(libc::EOPNOTSUPP),
+        };
+
+        let resp = match self.ipc.send_command(cmd) {
+            Ok(resp) => resp,
+            Err(err) => {
+                error!("command failed: {}", err);
+                return reply.error(libc::EFAULT);
+            }
+        };
+
+        // TODO respect offset and size
+        // TODO reuse allocation
+        let mut response_data = String::new();
+        match write!(&mut response_data, "{}", resp) {
+            Ok(_) => {
+                reply.data(response_data.as_bytes());
+            }
+            Err(_) => reply.error(libc::ENOMEM),
+        }
+    }
+
     fn readdir(
         &mut self,
         _req: &Request<'_>,
@@ -72,7 +124,7 @@ impl fuser::Filesystem for MinecraftFs {
 }
 
 impl MinecraftFs {
-    pub fn new() -> Self {
+    pub fn new(ipc: IpcChannel) -> Self {
         let uid;
         let gid;
 
@@ -85,18 +137,20 @@ impl MinecraftFs {
             uid,
             gid,
             structure: FilesystemStructure::new(),
+            ipc,
         }
     }
 
     fn mk_attr(&self, ino: u64, entry: &Entry) -> FileAttr {
         let time = SystemTime::now();
-        let kind = match entry {
-            Entry::File(_) => FileType::RegularFile,
-            Entry::Dir(_) => FileType::Directory,
+        // TODO set file size properly
+        let (kind, size) = match entry {
+            Entry::File(_) => (FileType::RegularFile, 256),
+            Entry::Dir(_) => (FileType::Directory, 0),
         };
         FileAttr {
             ino,
-            size: 0,
+            size,
             blocks: 0,
             atime: time,
             mtime: time,

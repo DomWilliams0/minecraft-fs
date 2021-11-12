@@ -5,6 +5,7 @@ use std::path::Path;
 
 use crate::fuse::MinecraftFs;
 use fuser::BackgroundSession;
+use ipc::IpcChannel;
 use parking_lot::{Condvar, Mutex};
 
 struct Mounter(BackgroundSession);
@@ -13,7 +14,7 @@ pub struct MountStatus;
 static MOUNTER: Mutex<Option<Mounter>> = parking_lot::const_mutex(None);
 static CVAR: Condvar = Condvar::new();
 
-pub fn mount(path: &Path, opts: &[&str]) -> Result<MountStatus, Box<dyn Error>> {
+pub fn mount(ipc: IpcChannel, path: &Path, opts: &[&str]) -> Result<MountStatus, Box<dyn Error>> {
     ctrlc::set_handler(|| {
         let mut guard = MOUNTER.lock();
         *guard = None;
@@ -26,7 +27,7 @@ pub fn mount(path: &Path, opts: &[&str]) -> Result<MountStatus, Box<dyn Error>> 
         .iter()
         .map(|s| OsStr::from_bytes(s.as_bytes()))
         .collect::<Vec<_>>();
-    let mnt = fuser::spawn_mount(MinecraftFs::new(), path, &opts)?;
+    let mnt = fuser::spawn_mount(MinecraftFs::new(ipc), path, &opts)?;
     {
         let mut guard = MOUNTER.lock();
         *guard = Some(Mounter(mnt));
