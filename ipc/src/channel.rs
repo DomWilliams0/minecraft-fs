@@ -14,6 +14,7 @@ pub struct IpcChannel {
     sock_path: PathBuf,
     sock: UnixStream,
     retries: u8,
+    recv_buffer: Vec<u8>,
 }
 
 #[derive(Debug, Error)]
@@ -56,6 +57,7 @@ impl IpcChannel {
             sock_path: path,
             sock,
             retries: RETRIES,
+            recv_buffer: Vec::with_capacity(8192),
         })
     }
 
@@ -73,7 +75,6 @@ impl IpcChannel {
         response_type: Option<ResponseType>,
     ) -> Result<ResponseBody, IpcError> {
         // TODO reuse buffer allocation
-        let mut recv_buffer = Vec::with_capacity(8192);
         let mut buf = FlatBufferBuilder::with_capacity(1024);
         {
             let offset = Command::create(&mut buf, &CommandArgs { cmd: command });
@@ -102,13 +103,13 @@ impl IpcChannel {
             let len = u32::from_le_bytes(len_bytes);
             log::trace!("reading {} bytes from socket", len);
 
-            recv_buffer.resize(len as usize, 0);
+            self.recv_buffer.resize(len as usize, 0);
             self.sock
-                .read_exact(&mut recv_buffer)
+                .read_exact(&mut self.recv_buffer)
                 .map_err(IpcError::Receiving)?;
         }
 
-        let response = root_as_response(&recv_buffer).expect("bad");
+        let response = root_as_response(&self.recv_buffer).expect("bad");
 
         if let Some(err) = response.error() {
             Err(match err {
@@ -116,6 +117,7 @@ impl IpcChannel {
                 _ => IpcError::ClientError(err.variant_name().unwrap()),
             })
         } else {
+            use ResponseType::*;
             match (
                 resp_type,
                 response.float(),
@@ -123,21 +125,14 @@ impl IpcChannel {
                 response.string(),
                 response.pos(),
             ) {
-                (ResponseType::Float, Some(val), None, None, None) => Ok(ResponseBody::Float(val)),
-                (ResponseType::Integer, None, Some(val), None, None) => {
-                    Ok(ResponseBody::Integer(val))
-                }
-                // TODO dont clone string
-                (ResponseType::String, None, None, Some(val), None) => {
-                    Ok(ResponseBody::String(val.to_owned()))
-                }
-                (ResponseType::Position, None, None, None, Some(val)) => {
-                    Ok(ResponseBody::Position {
-                        x: val.x(),
-                        y: val.y(),
-                        z: val.z(),
-                    })
-                }
+                (Float, Some(val), None, None, None) => Ok(ResponseBody::Float(val)),
+                (Integer, None, Some(val), None, None) => Ok(ResponseBody::Integer(val)),
+                (String, None, None, Some(val), None) => Ok(ResponseBody::String(val)),
+                (Position, None, None, None, Some(val)) => Ok(ResponseBody::Position {
+                    x: val.x(),
+                    y: val.y(),
+                    z: val.z(),
+                }),
                 _ => Err(IpcError::UnexpectedResponse(resp_type)),
             }
         }

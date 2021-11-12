@@ -14,15 +14,15 @@ pub enum ReadCommand {
     // TODO WithoutResponse?
 }
 
-pub enum ResponseBody {
+pub enum ResponseBody<'a> {
     None,
     Integer(i32),
     Float(f32),
-    String(String),
+    String(&'a str),
     Position { x: f64, y: f64, z: f64 },
 }
 
-impl Display for ResponseBody {
+impl Display for ResponseBody<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ResponseBody::None => Ok(()),
