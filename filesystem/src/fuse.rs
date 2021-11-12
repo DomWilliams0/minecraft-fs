@@ -1,9 +1,14 @@
-use crate::structure::{Entry, FilesystemStructure};
+use crate::state::{CachedGameState, GameStateInterest};
+use crate::structure::{Entry, EntryFilterResult, FilesystemStructure};
 use fuser::{FileAttr, FileType, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
 use ipc::{IpcChannel, IpcError};
 use log::*;
+use parking_lot::Mutex;
+
 use std::ffi::OsStr;
 use std::fmt::Write;
+
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 pub struct MinecraftFs {
@@ -11,6 +16,8 @@ pub struct MinecraftFs {
     gid: u32,
     structure: FilesystemStructure,
     ipc: IpcChannel,
+    state: CachedGameState,
+    interest: Arc<Mutex<GameStateInterest>>,
 }
 
 // TODO this might be able to be much longer
@@ -74,7 +81,7 @@ impl fuser::Filesystem for MinecraftFs {
             None => return reply.error(libc::EOPNOTSUPP),
         };
 
-        let resp = match self.ipc.send_read(cmd) {
+        let resp = match self.ipc.send_read_command(cmd) {
             Ok(resp) => resp,
             Err(err) => {
                 error!("command failed: {}", err);
@@ -111,8 +118,29 @@ impl fuser::Filesystem for MinecraftFs {
             }
         };
 
+        // TODO update state interest
+        let state = match self.state.get(&mut self.ipc) {
+            Ok(state) => state,
+            Err(err) => {
+                log::error!("failed to fetch game state: {}", err);
+                return reply.error(libc::EIO);
+            }
+        };
+
         let offset = offset as usize;
+        let mut last_filter = None;
         for (i, child) in dir.children().iter().skip(offset).enumerate() {
+            if let Some(EntryFilterResult::IncludeAllChildren) = last_filter {
+                // dont bother filtering
+            } else {
+                let filtered = child.filter(state);
+                let skip = matches!(filtered, EntryFilterResult::Exclude);
+                last_filter = Some(filtered);
+                if skip {
+                    continue;
+                }
+            }
+
             let entry = self.structure.lookup_entry(child);
             if reply.add(ino, (offset + i + 1) as i64, entry.kind(), entry.name()) {
                 break;
@@ -127,8 +155,11 @@ fn ipc_error_code(err: &IpcError) -> i32 {
     match err {
         IpcError::NoCurrentGame | IpcError::ClientError(_) => libc::EOPNOTSUPP,
         IpcError::NotFound => libc::ENOENT,
-        IpcError::Connecting(_) | IpcError::Sending(_) | IpcError::Receiving(_) => libc::EIO,
-        IpcError::UnexpectedResponse(_) => libc::EINVAL,
+        IpcError::Connecting(_)
+        | IpcError::Sending(_)
+        | IpcError::Receiving(_)
+        | IpcError::Deserialization(_) => libc::EIO,
+        IpcError::UnexpectedGameResponse(_) | IpcError::UnexpectedResponse(_) => libc::EINVAL,
     }
 }
 
@@ -142,11 +173,16 @@ impl MinecraftFs {
             gid = libc::getgid();
         }
 
+        let interest = Arc::new(Mutex::new(GameStateInterest::default()));
+        let state = CachedGameState::new(interest.clone());
+
         Self {
             uid,
             gid,
             structure: FilesystemStructure::new(),
             ipc,
+            interest,
+            state,
         }
     }
 

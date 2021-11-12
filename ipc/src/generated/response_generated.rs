@@ -110,6 +110,105 @@ pub mod mcfs {
     }
 
     impl flatbuffers::SimpleToVerifyInSlice for Error {}
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    pub const ENUM_MIN_GAME_RESPONSE_BODY: u8 = 0;
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    pub const ENUM_MAX_GAME_RESPONSE_BODY: u8 = 2;
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    #[allow(non_camel_case_types)]
+    pub const ENUM_VALUES_GAME_RESPONSE_BODY: [GameResponseBody; 3] = [
+        GameResponseBody::NONE,
+        GameResponseBody::Response,
+        GameResponseBody::StateResponse,
+    ];
+
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+    #[repr(transparent)]
+    pub struct GameResponseBody(pub u8);
+    #[allow(non_upper_case_globals)]
+    impl GameResponseBody {
+        pub const NONE: Self = Self(0);
+        pub const Response: Self = Self(1);
+        pub const StateResponse: Self = Self(2);
+
+        pub const ENUM_MIN: u8 = 0;
+        pub const ENUM_MAX: u8 = 2;
+        pub const ENUM_VALUES: &'static [Self] = &[Self::NONE, Self::Response, Self::StateResponse];
+        /// Returns the variant's name or "" if unknown.
+        pub fn variant_name(self) -> Option<&'static str> {
+            match self {
+                Self::NONE => Some("NONE"),
+                Self::Response => Some("Response"),
+                Self::StateResponse => Some("StateResponse"),
+                _ => None,
+            }
+        }
+    }
+    impl std::fmt::Debug for GameResponseBody {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            if let Some(name) = self.variant_name() {
+                f.write_str(name)
+            } else {
+                f.write_fmt(format_args!("<UNKNOWN {:?}>", self.0))
+            }
+        }
+    }
+    impl<'a> flatbuffers::Follow<'a> for GameResponseBody {
+        type Inner = Self;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            let b = unsafe { flatbuffers::read_scalar_at::<u8>(buf, loc) };
+            Self(b)
+        }
+    }
+
+    impl flatbuffers::Push for GameResponseBody {
+        type Output = GameResponseBody;
+        #[inline]
+        fn push(&self, dst: &mut [u8], _rest: &[u8]) {
+            unsafe {
+                flatbuffers::emplace_scalar::<u8>(dst, self.0);
+            }
+        }
+    }
+
+    impl flatbuffers::EndianScalar for GameResponseBody {
+        #[inline]
+        fn to_little_endian(self) -> Self {
+            let b = u8::to_le(self.0);
+            Self(b)
+        }
+        #[inline]
+        #[allow(clippy::wrong_self_convention)]
+        fn from_little_endian(self) -> Self {
+            let b = u8::from_le(self.0);
+            Self(b)
+        }
+    }
+
+    impl<'a> flatbuffers::Verifiable for GameResponseBody {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            u8::run_verifier(v, pos)
+        }
+    }
+
+    impl flatbuffers::SimpleToVerifyInSlice for GameResponseBody {}
+    pub struct GameResponseBodyUnionTableOffset {}
+
     // struct Vec3, aligned to 8
     #[repr(transparent)]
     #[derive(Clone, Copy, PartialEq)]
@@ -428,92 +527,382 @@ pub mod mcfs {
             ds.finish()
         }
     }
+    pub enum StateResponseOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct StateResponse<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for StateResponse<'a> {
+        type Inner = StateResponse<'a>;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table { buf, loc },
+            }
+        }
+    }
+
+    impl<'a> StateResponse<'a> {
+        #[inline]
+        pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            StateResponse { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args StateResponseArgs,
+        ) -> flatbuffers::WIPOffset<StateResponse<'bldr>> {
+            let mut builder = StateResponseBuilder::new(_fbb);
+            builder.add_is_in_game(args.is_in_game);
+            builder.finish()
+        }
+
+        pub const VT_IS_IN_GAME: flatbuffers::VOffsetT = 4;
+
+        #[inline]
+        pub fn is_in_game(&self) -> bool {
+            self._tab
+                .get::<bool>(StateResponse::VT_IS_IN_GAME, Some(false))
+                .unwrap()
+        }
+    }
+
+    impl flatbuffers::Verifiable for StateResponse<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<bool>(&"is_in_game", Self::VT_IS_IN_GAME, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct StateResponseArgs {
+        pub is_in_game: bool,
+    }
+    impl<'a> Default for StateResponseArgs {
+        #[inline]
+        fn default() -> Self {
+            StateResponseArgs { is_in_game: false }
+        }
+    }
+    pub struct StateResponseBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> StateResponseBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_is_in_game(&mut self, is_in_game: bool) {
+            self.fbb_
+                .push_slot::<bool>(StateResponse::VT_IS_IN_GAME, is_in_game, false);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        ) -> StateResponseBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            StateResponseBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<StateResponse<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl std::fmt::Debug for StateResponse<'_> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let mut ds = f.debug_struct("StateResponse");
+            ds.field("is_in_game", &self.is_in_game());
+            ds.finish()
+        }
+    }
+    pub enum GameResponseOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct GameResponse<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for GameResponse<'a> {
+        type Inner = GameResponse<'a>;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table { buf, loc },
+            }
+        }
+    }
+
+    impl<'a> GameResponse<'a> {
+        #[inline]
+        pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            GameResponse { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args GameResponseArgs,
+        ) -> flatbuffers::WIPOffset<GameResponse<'bldr>> {
+            let mut builder = GameResponseBuilder::new(_fbb);
+            if let Some(x) = args.body {
+                builder.add_body(x);
+            }
+            builder.add_body_type(args.body_type);
+            builder.finish()
+        }
+
+        pub const VT_BODY_TYPE: flatbuffers::VOffsetT = 4;
+        pub const VT_BODY: flatbuffers::VOffsetT = 6;
+
+        #[inline]
+        pub fn body_type(&self) -> GameResponseBody {
+            self._tab
+                .get::<GameResponseBody>(GameResponse::VT_BODY_TYPE, Some(GameResponseBody::NONE))
+                .unwrap()
+        }
+        #[inline]
+        pub fn body(&self) -> flatbuffers::Table<'a> {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Table<'a>>>(
+                    GameResponse::VT_BODY,
+                    None,
+                )
+                .unwrap()
+        }
+        #[inline]
+        #[allow(non_snake_case)]
+        pub fn body_as_response(&self) -> Option<Response<'a>> {
+            if self.body_type() == GameResponseBody::Response {
+                let u = self.body();
+                Some(Response::init_from_table(u))
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        #[allow(non_snake_case)]
+        pub fn body_as_state_response(&self) -> Option<StateResponse<'a>> {
+            if self.body_type() == GameResponseBody::StateResponse {
+                let u = self.body();
+                Some(StateResponse::init_from_table(u))
+            } else {
+                None
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for GameResponse<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_union::<GameResponseBody, _>(
+                    &"body_type",
+                    Self::VT_BODY_TYPE,
+                    &"body",
+                    Self::VT_BODY,
+                    true,
+                    |key, v, pos| match key {
+                        GameResponseBody::Response => v
+                            .verify_union_variant::<flatbuffers::ForwardsUOffset<Response>>(
+                                "GameResponseBody::Response",
+                                pos,
+                            ),
+                        GameResponseBody::StateResponse => v
+                            .verify_union_variant::<flatbuffers::ForwardsUOffset<StateResponse>>(
+                                "GameResponseBody::StateResponse",
+                                pos,
+                            ),
+                        _ => Ok(()),
+                    },
+                )?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct GameResponseArgs {
+        pub body_type: GameResponseBody,
+        pub body: Option<flatbuffers::WIPOffset<flatbuffers::UnionWIPOffset>>,
+    }
+    impl<'a> Default for GameResponseArgs {
+        #[inline]
+        fn default() -> Self {
+            GameResponseArgs {
+                body_type: GameResponseBody::NONE,
+                body: None, // required field
+            }
+        }
+    }
+    pub struct GameResponseBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> GameResponseBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_body_type(&mut self, body_type: GameResponseBody) {
+            self.fbb_.push_slot::<GameResponseBody>(
+                GameResponse::VT_BODY_TYPE,
+                body_type,
+                GameResponseBody::NONE,
+            );
+        }
+        #[inline]
+        pub fn add_body(&mut self, body: flatbuffers::WIPOffset<flatbuffers::UnionWIPOffset>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(GameResponse::VT_BODY, body);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        ) -> GameResponseBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            GameResponseBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<GameResponse<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            self.fbb_.required(o, GameResponse::VT_BODY, "body");
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl std::fmt::Debug for GameResponse<'_> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let mut ds = f.debug_struct("GameResponse");
+            ds.field("body_type", &self.body_type());
+            match self.body_type() {
+                GameResponseBody::Response => {
+                    if let Some(x) = self.body_as_response() {
+                        ds.field("body", &x)
+                    } else {
+                        ds.field(
+                            "body",
+                            &"InvalidFlatbuffer: Union discriminant does not match value.",
+                        )
+                    }
+                }
+                GameResponseBody::StateResponse => {
+                    if let Some(x) = self.body_as_state_response() {
+                        ds.field("body", &x)
+                    } else {
+                        ds.field(
+                            "body",
+                            &"InvalidFlatbuffer: Union discriminant does not match value.",
+                        )
+                    }
+                }
+                _ => {
+                    let x: Option<()> = None;
+                    ds.field("body", &x)
+                }
+            };
+            ds.finish()
+        }
+    }
     #[inline]
     #[deprecated(since = "2.0.0", note = "Deprecated in favor of `root_as...` methods.")]
-    pub fn get_root_as_response<'a>(buf: &'a [u8]) -> Response<'a> {
-        unsafe { flatbuffers::root_unchecked::<Response<'a>>(buf) }
+    pub fn get_root_as_game_response<'a>(buf: &'a [u8]) -> GameResponse<'a> {
+        unsafe { flatbuffers::root_unchecked::<GameResponse<'a>>(buf) }
     }
 
     #[inline]
     #[deprecated(since = "2.0.0", note = "Deprecated in favor of `root_as...` methods.")]
-    pub fn get_size_prefixed_root_as_response<'a>(buf: &'a [u8]) -> Response<'a> {
-        unsafe { flatbuffers::size_prefixed_root_unchecked::<Response<'a>>(buf) }
+    pub fn get_size_prefixed_root_as_game_response<'a>(buf: &'a [u8]) -> GameResponse<'a> {
+        unsafe { flatbuffers::size_prefixed_root_unchecked::<GameResponse<'a>>(buf) }
     }
 
     #[inline]
-    /// Verifies that a buffer of bytes contains a `Response`
+    /// Verifies that a buffer of bytes contains a `GameResponse`
     /// and returns it.
     /// Note that verification is still experimental and may not
     /// catch every error, or be maximally performant. For the
     /// previous, unchecked, behavior use
-    /// `root_as_response_unchecked`.
-    pub fn root_as_response(buf: &[u8]) -> Result<Response, flatbuffers::InvalidFlatbuffer> {
-        flatbuffers::root::<Response>(buf)
+    /// `root_as_game_response_unchecked`.
+    pub fn root_as_game_response(
+        buf: &[u8],
+    ) -> Result<GameResponse, flatbuffers::InvalidFlatbuffer> {
+        flatbuffers::root::<GameResponse>(buf)
     }
     #[inline]
     /// Verifies that a buffer of bytes contains a size prefixed
-    /// `Response` and returns it.
+    /// `GameResponse` and returns it.
     /// Note that verification is still experimental and may not
     /// catch every error, or be maximally performant. For the
     /// previous, unchecked, behavior use
-    /// `size_prefixed_root_as_response_unchecked`.
-    pub fn size_prefixed_root_as_response(
+    /// `size_prefixed_root_as_game_response_unchecked`.
+    pub fn size_prefixed_root_as_game_response(
         buf: &[u8],
-    ) -> Result<Response, flatbuffers::InvalidFlatbuffer> {
-        flatbuffers::size_prefixed_root::<Response>(buf)
+    ) -> Result<GameResponse, flatbuffers::InvalidFlatbuffer> {
+        flatbuffers::size_prefixed_root::<GameResponse>(buf)
     }
     #[inline]
     /// Verifies, with the given options, that a buffer of bytes
-    /// contains a `Response` and returns it.
+    /// contains a `GameResponse` and returns it.
     /// Note that verification is still experimental and may not
     /// catch every error, or be maximally performant. For the
     /// previous, unchecked, behavior use
-    /// `root_as_response_unchecked`.
-    pub fn root_as_response_with_opts<'b, 'o>(
+    /// `root_as_game_response_unchecked`.
+    pub fn root_as_game_response_with_opts<'b, 'o>(
         opts: &'o flatbuffers::VerifierOptions,
         buf: &'b [u8],
-    ) -> Result<Response<'b>, flatbuffers::InvalidFlatbuffer> {
-        flatbuffers::root_with_opts::<Response<'b>>(opts, buf)
+    ) -> Result<GameResponse<'b>, flatbuffers::InvalidFlatbuffer> {
+        flatbuffers::root_with_opts::<GameResponse<'b>>(opts, buf)
     }
     #[inline]
     /// Verifies, with the given verifier options, that a buffer of
-    /// bytes contains a size prefixed `Response` and returns
+    /// bytes contains a size prefixed `GameResponse` and returns
     /// it. Note that verification is still experimental and may not
     /// catch every error, or be maximally performant. For the
     /// previous, unchecked, behavior use
-    /// `root_as_response_unchecked`.
-    pub fn size_prefixed_root_as_response_with_opts<'b, 'o>(
+    /// `root_as_game_response_unchecked`.
+    pub fn size_prefixed_root_as_game_response_with_opts<'b, 'o>(
         opts: &'o flatbuffers::VerifierOptions,
         buf: &'b [u8],
-    ) -> Result<Response<'b>, flatbuffers::InvalidFlatbuffer> {
-        flatbuffers::size_prefixed_root_with_opts::<Response<'b>>(opts, buf)
+    ) -> Result<GameResponse<'b>, flatbuffers::InvalidFlatbuffer> {
+        flatbuffers::size_prefixed_root_with_opts::<GameResponse<'b>>(opts, buf)
     }
     #[inline]
-    /// Assumes, without verification, that a buffer of bytes contains a Response and returns it.
+    /// Assumes, without verification, that a buffer of bytes contains a GameResponse and returns it.
     /// # Safety
-    /// Callers must trust the given bytes do indeed contain a valid `Response`.
-    pub unsafe fn root_as_response_unchecked(buf: &[u8]) -> Response {
-        flatbuffers::root_unchecked::<Response>(buf)
+    /// Callers must trust the given bytes do indeed contain a valid `GameResponse`.
+    pub unsafe fn root_as_game_response_unchecked(buf: &[u8]) -> GameResponse {
+        flatbuffers::root_unchecked::<GameResponse>(buf)
     }
     #[inline]
-    /// Assumes, without verification, that a buffer of bytes contains a size prefixed Response and returns it.
+    /// Assumes, without verification, that a buffer of bytes contains a size prefixed GameResponse and returns it.
     /// # Safety
-    /// Callers must trust the given bytes do indeed contain a valid size prefixed `Response`.
-    pub unsafe fn size_prefixed_root_as_response_unchecked(buf: &[u8]) -> Response {
-        flatbuffers::size_prefixed_root_unchecked::<Response>(buf)
+    /// Callers must trust the given bytes do indeed contain a valid size prefixed `GameResponse`.
+    pub unsafe fn size_prefixed_root_as_game_response_unchecked(buf: &[u8]) -> GameResponse {
+        flatbuffers::size_prefixed_root_unchecked::<GameResponse>(buf)
     }
     #[inline]
-    pub fn finish_response_buffer<'a, 'b>(
+    pub fn finish_game_response_buffer<'a, 'b>(
         fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>,
-        root: flatbuffers::WIPOffset<Response<'a>>,
+        root: flatbuffers::WIPOffset<GameResponse<'a>>,
     ) {
         fbb.finish(root, None);
     }
 
     #[inline]
-    pub fn finish_size_prefixed_response_buffer<'a, 'b>(
+    pub fn finish_size_prefixed_game_response_buffer<'a, 'b>(
         fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>,
-        root: flatbuffers::WIPOffset<Response<'a>>,
+        root: flatbuffers::WIPOffset<GameResponse<'a>>,
     ) {
         fbb.finish_size_prefixed(root, None);
     }

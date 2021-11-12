@@ -21,5 +21,14 @@ table Response {
 	pos:Vec3;
 }
 
+table StateResponse {
+    is_in_game:bool;
+}
 
-root_type Response;
+union GameResponseBody {Response, StateResponse}
+
+table GameResponse {
+    body:GameResponseBody (required);
+}
+
+root_type GameResponse;

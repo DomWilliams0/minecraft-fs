@@ -6,31 +6,46 @@ import ms.domwillia.mcfs.MinecraftFsMod
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.network.ClientPlayerEntity
 import net.minecraft.util.math.Vec3d
-import net.minecraft.util.math.Vec3f
 import java.nio.ByteBuffer
 
 class NoGameException : Exception()
 
 @ExperimentalUnsignedTypes
-class CommandExecutor(private val responseBuilder: FlatBufferBuilder) {
+class Executor(private val responseBuilder: FlatBufferBuilder) {
 
-    fun execute(command: Command): ByteBuffer {
+    fun execute(request: GameRequest): ByteBuffer {
         responseBuilder.clear();
 
-        val resp = try {
-            dewIt(command)
-        } catch (_: NoGameException) {
-            mkError(Error.NoGame)
-        } catch (e: Exception) {
-            MinecraftFsMod.LOGGER.catching(e)
-            mkError(Error.Unknown)
+
+        val gameResp = when (request.bodyType) {
+            GameRequestBody.Command -> {
+                val respBody = try {
+                    executeCommand(request.body(Command()) as Command)
+                } catch (_: NoGameException) {
+                    mkError(Error.NoGame)
+                } catch (e: Exception) {
+                    MinecraftFsMod.LOGGER.catching(e)
+                    mkError(Error.Unknown)
+                }
+
+                GameResponse.createGameResponse(responseBuilder, GameResponseBody.Response, respBody)
+            }
+            GameRequestBody.StateRequest -> {
+                val respBody = executeStateRequest(request.body(StateRequest()) as StateRequest)
+                GameResponse.createGameResponse(responseBuilder, GameResponseBody.StateResponse, respBody)
+            }
+
+            else -> {
+                throw NullPointerException()
+            }
         }
 
-        responseBuilder.finish(resp)
+        responseBuilder.finish(gameResp)
         return responseBuilder.dataBuffer()
     }
 
-    private fun dewIt(command: Command): Int {
+    private fun executeCommand(command: Command): Int {
+        MinecraftFsMod.LOGGER.info("Executing command '${CommandType.name(command.cmd)}'")
         return when (command.cmd) {
             CommandType.PlayerHealth -> mkFloat(thePlayer.health)
             CommandType.PlayerName -> mkString(MinecraftClient.getInstance().session.username)
@@ -40,7 +55,13 @@ class CommandExecutor(private val responseBuilder: FlatBufferBuilder) {
                 mkError(Error.UnknownCommand)
             }
         }
+    }
 
+    private fun executeStateRequest(req: StateRequest): Int {
+        MinecraftFsMod.LOGGER.info("Executing state request")
+
+        val isInGame = MinecraftClient.getInstance().player != null;
+        return StateResponse.createStateResponse(responseBuilder, isInGame = isInGame)
     }
 
     private val thePlayer: ClientPlayerEntity

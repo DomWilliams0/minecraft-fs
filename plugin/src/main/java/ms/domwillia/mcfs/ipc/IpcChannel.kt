@@ -1,6 +1,8 @@
 package ms.domwillia.mcfs.ipc
 
 import MCFS.Command
+import MCFS.GameRequest
+import MCFS.GameRequestBody
 import com.google.flatbuffers.FlatBufferBuilder
 import java.lang.Runnable
 import java.io.IOException
@@ -26,7 +28,7 @@ class IpcChannel : Runnable {
     override fun run() {
         val buf = ByteBuffer.allocate(8192)
         val responseBuilder = FlatBufferBuilder(8192)
-        val executor = CommandExecutor(responseBuilder)
+        val executor = Executor(responseBuilder)
         while (true) {
             var client: SocketChannel? = null
             try {
@@ -41,11 +43,8 @@ class IpcChannel : Runnable {
                     val len = buf.int
                     MinecraftFsMod.LOGGER.info("Reading $len bytes")
 
-                    val command = Command.getRootAsCommand(buf)
-                    // TODO log command name
-                    MinecraftFsMod.LOGGER.info("Read command ${command.cmd}")
-
-                    val response = executor.execute(command)
+                    val request = GameRequest.getRootAsGameRequest(buf);
+                    val response = executor.execute(request)
 
                     val responseSize = response.remaining()
                     buf.clear();

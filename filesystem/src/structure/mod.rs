@@ -1,25 +1,20 @@
 mod registry;
-pub use registry::{Entry, FilesystemStructure};
+pub use registry::{Entry, EntryFilterResult, FilesystemStructure};
 
 mod structure {
     #![allow(clippy::module_inception)]
 
     use super::*;
+    use crate::state::GameState;
     use ipc::{generated::CommandType, ReadCommand, ResponseType};
     use registry::{DirEntry, EntryRef, FileEntry, Registration};
 
     macro_rules! file_entry {
-        ($ty:ident, $name:expr, read $read:expr) => {
+        ($ty:ident, $name:expr) => {
             struct $ty;
             impl $ty {
                 fn entry() -> Entry {
                     Entry::file(Self)
-                }
-            }
-
-            impl FileEntry for $ty {
-                fn read(&self) -> Option<ReadCommand> {
-                    $read
                 }
             }
 
@@ -68,9 +63,44 @@ mod structure {
             EntryRef::File(&PlayerPosition)
         ]
     );
-    file_entry!(PlayerHealth, "health", read Some(ReadCommand::WithResponse(CommandType::PlayerHealth, ResponseType::Float)));
-    file_entry!(PlayerName, "name", read Some(ReadCommand::WithResponse(CommandType::PlayerName, ResponseType::String)));
-    file_entry!(PlayerPosition, "position", read Some(ReadCommand::WithResponse(CommandType::PlayerPosition, ResponseType::Position)));
+
+    file_entry!(PlayerHealth, "health");
+    impl FileEntry for PlayerHealth {
+        fn read(&self) -> Option<ReadCommand> {
+            Some(ReadCommand::WithResponse(
+                CommandType::PlayerHealth,
+                ResponseType::Float,
+            ))
+        }
+
+        fn should_include(&self, state: &GameState) -> bool {
+            state.is_in_game
+        }
+    }
+
+    file_entry!(PlayerName, "name");
+    impl FileEntry for PlayerName {
+        fn read(&self) -> Option<ReadCommand> {
+            Some(ReadCommand::WithResponse(
+                CommandType::PlayerName,
+                ResponseType::String,
+            ))
+        }
+    }
+
+    file_entry!(PlayerPosition, "position");
+    impl FileEntry for PlayerPosition {
+        fn read(&self) -> Option<ReadCommand> {
+            Some(ReadCommand::WithResponse(
+                CommandType::PlayerPosition,
+                ResponseType::Position,
+            ))
+        }
+
+        fn should_include(&self, state: &GameState) -> bool {
+            state.is_in_game
+        }
+    }
 
     dir_entry!(WorldDir, "world", []);
     // file_entry!(WorldName, "name");

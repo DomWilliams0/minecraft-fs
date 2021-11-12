@@ -1,0 +1,23 @@
+namespace MCFS;
+
+enum CommandType:int32 {
+	PlayerHealth,
+	PlayerName,
+	PlayerPosition,
+}
+
+table Command {
+    cmd: CommandType;
+}
+
+table StateRequest {
+    entity_list:bool;
+}
+
+union GameRequestBody {Command, StateRequest}
+
+table GameRequest {
+    body:GameRequestBody (required);
+}
+
+root_type GameRequest;

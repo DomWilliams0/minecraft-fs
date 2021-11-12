@@ -65,7 +65,5 @@ class Response : Table() {
             val o = builder.endTable()
             return o
         }
-        fun finishResponseBuffer(builder: FlatBufferBuilder, offset: Int) = builder.finish(offset)
-        fun finishSizePrefixedResponseBuffer(builder: FlatBufferBuilder, offset: Int) = builder.finishSizePrefixed(offset)
     }
 }

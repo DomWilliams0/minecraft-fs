@@ -1,9 +1,12 @@
 use std::io::{ErrorKind, Read, Write};
 
 use crate::command::{ResponseBody, ResponseType};
-use crate::generated::{root_as_response, Command, CommandArgs, CommandType, Error};
+use crate::generated::{
+    root_as_game_response, Command, CommandArgs, CommandType, Error, GameRequest, GameRequestArgs,
+    GameRequestBody, GameResponseBody, StateRequest, StateRequestArgs, StateResponse,
+};
 use crate::ReadCommand;
-use flatbuffers::FlatBufferBuilder;
+use flatbuffers::{FlatBufferBuilder, InvalidFlatbuffer};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -37,8 +40,14 @@ pub enum IpcError {
     #[error("Client error: {0}")]
     ClientError(&'static str),
 
+    #[error("Got unexpected response type {0:?}")]
+    UnexpectedGameResponse(GameResponseBody),
+
     #[error("Expected response type {0:?} but got something else")]
     UnexpectedResponse(ResponseType),
+
+    #[error("Deserialization failed: {0}")]
+    Deserialization(#[from] InvalidFlatbuffer),
 }
 
 impl IpcChannel {
@@ -61,12 +70,40 @@ impl IpcChannel {
         })
     }
 
-    pub fn send_read(&mut self, cmd: ReadCommand) -> Result<ResponseBody, IpcError> {
+    pub fn send_read_command(&mut self, cmd: ReadCommand) -> Result<ResponseBody, IpcError> {
         let (cmd, resp) = match cmd {
             ReadCommand::WithResponse(cmd, resp) => (cmd, Some(resp)),
         };
 
         self.send_command(cmd, resp)
+    }
+
+    pub fn send_state_request(
+        &mut self,
+        req: &StateRequestArgs,
+    ) -> Result<StateResponse, IpcError> {
+        // TODO reuse buffer allocation
+        let mut buf = FlatBufferBuilder::with_capacity(1024);
+
+        let req = StateRequest::create(&mut buf, req);
+        let req = GameRequest::create(
+            &mut buf,
+            &GameRequestArgs {
+                body_type: GameRequestBody::StateRequest,
+                body: Some(req.as_union_value()),
+            },
+        );
+        buf.finish(req, None);
+
+        self.send_raw_request(buf.finished_data())?;
+
+        let response = self
+            .recv_raw_response()
+            .and_then(|resp| root_as_game_response(resp).map_err(IpcError::Deserialization))?;
+
+        response
+            .body_as_state_response()
+            .ok_or_else(|| IpcError::UnexpectedGameResponse(response.body_type()))
     }
 
     fn send_command(
@@ -76,40 +113,31 @@ impl IpcChannel {
     ) -> Result<ResponseBody, IpcError> {
         // TODO reuse buffer allocation
         let mut buf = FlatBufferBuilder::with_capacity(1024);
-        {
-            let offset = Command::create(&mut buf, &CommandArgs { cmd: command });
-            buf.finish(offset, None);
-        }
+        let cmd = Command::create(&mut buf, &CommandArgs { cmd: command });
+        let req = GameRequest::create(
+            &mut buf,
+            &GameRequestArgs {
+                body_type: GameRequestBody::Command,
+                body: Some(cmd.as_union_value()),
+            },
+        );
+        buf.finish(req, None);
 
-        {
-            let data = buf.finished_data();
-            let len = data.len() as u32;
-            log::trace!("sending {} bytes for command {:?}", len, command);
-            self.attempt_write(&len.to_le_bytes())?;
-            self.attempt_write(data)?;
-        }
+        self.send_raw_request(buf.finished_data())?;
 
         let resp_type = match response_type {
             Some(ty) => ty,
             None => return Ok(ResponseBody::None),
         };
 
-        {
-            let mut len_bytes = [0u8; 4];
-            self.sock
-                .read_exact(&mut len_bytes)
-                .map_err(IpcError::Receiving)?;
+        let response = self
+            .recv_raw_response()
+            .and_then(|resp| root_as_game_response(resp).map_err(IpcError::Deserialization))?;
 
-            let len = u32::from_le_bytes(len_bytes);
-            log::trace!("reading {} bytes from socket", len);
-
-            self.recv_buffer.resize(len as usize, 0);
-            self.sock
-                .read_exact(&mut self.recv_buffer)
-                .map_err(IpcError::Receiving)?;
-        }
-
-        let response = root_as_response(&self.recv_buffer).expect("bad");
+        let response = match response.body_as_response() {
+            Some(resp) => resp,
+            None => return Err(IpcError::UnexpectedGameResponse(response.body_type())),
+        };
 
         if let Some(err) = response.error() {
             Err(match err {
@@ -136,6 +164,30 @@ impl IpcChannel {
                 _ => Err(IpcError::UnexpectedResponse(resp_type)),
             }
         }
+    }
+
+    fn send_raw_request(&mut self, data: &[u8]) -> Result<(), IpcError> {
+        let len = data.len() as u32;
+        log::trace!("sending {} bytes on socket", len);
+        self.attempt_write(&len.to_le_bytes())?;
+        self.attempt_write(data)
+    }
+
+    fn recv_raw_response(&mut self) -> Result<&[u8], IpcError> {
+        let mut len_bytes = [0u8; 4];
+        self.sock
+            .read_exact(&mut len_bytes)
+            .map_err(IpcError::Receiving)?;
+
+        let len = u32::from_le_bytes(len_bytes);
+        log::trace!("reading {} bytes from socket", len);
+
+        self.recv_buffer.resize(len as usize, 0);
+        self.sock
+            .read_exact(&mut self.recv_buffer)
+            .map_err(IpcError::Receiving)?;
+
+        Ok(&self.recv_buffer)
     }
 
     fn open_socket(path: &Path) -> Result<UnixStream, IpcError> {

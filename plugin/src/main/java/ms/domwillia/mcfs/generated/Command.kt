@@ -40,7 +40,5 @@ class Command : Table() {
             val o = builder.endTable()
             return o
         }
-        fun finishCommandBuffer(builder: FlatBufferBuilder, offset: Int) = builder.finish(offset)
-        fun finishSizePrefixedCommandBuffer(builder: FlatBufferBuilder, offset: Int) = builder.finishSizePrefixed(offset)
     }
 }

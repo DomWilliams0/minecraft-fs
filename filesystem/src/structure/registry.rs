@@ -1,3 +1,4 @@
+use crate::state::GameState;
 use crate::structure::structure::Root;
 use ipc::ReadCommand;
 use smallvec::SmallVec;
@@ -37,10 +38,18 @@ pub enum EntryRef {
 
 pub trait DirEntry: Send + Sync + Any {
     fn children(&self) -> &'static [EntryRef];
+
+    fn filter(&self, _state: &GameState) -> EntryFilterResult {
+        EntryFilterResult::IncludeSelf
+    }
 }
 
 pub trait FileEntry: Send + Sync + Any {
     fn read(&self) -> Option<ReadCommand>;
+
+    fn should_include(&self, _state: &GameState) -> bool {
+        true
+    }
 }
 
 struct StructureBuilder {
@@ -55,6 +64,13 @@ pub struct Registration {
 }
 
 inventory::collect!(Registration);
+
+#[derive(Copy, Clone)]
+pub enum EntryFilterResult {
+    IncludeSelf,
+    IncludeAllChildren,
+    Exclude,
+}
 
 impl StructureBuilder {
     fn register(&mut self, inode: u64, name: &'static str, instance: Entry) {
@@ -233,6 +249,19 @@ impl EntryRef {
         match self {
             EntryRef::File(b) => (*b).type_id(),
             EntryRef::Dir(b) => (*b).type_id(),
+        }
+    }
+
+    pub fn filter(&self, state: &GameState) -> EntryFilterResult {
+        match self {
+            EntryRef::File(b) => {
+                if b.should_include(state) {
+                    EntryFilterResult::IncludeSelf
+                } else {
+                    EntryFilterResult::Exclude
+                }
+            }
+            EntryRef::Dir(b) => b.filter(state),
         }
     }
 }
