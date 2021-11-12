@@ -59,8 +59,18 @@ mod structure {
         [EntryRef::Dir(&PlayerDir), EntryRef::Dir(&WorldDir)]
     );
 
-    dir_entry!(PlayerDir, "player", [EntryRef::File(&PlayerHealth)]);
+    dir_entry!(
+        PlayerDir,
+        "player",
+        [
+            EntryRef::File(&PlayerHealth),
+            EntryRef::File(&PlayerName),
+            EntryRef::File(&PlayerPosition)
+        ]
+    );
     file_entry!(PlayerHealth, "health", read Some(ReadCommand::WithResponse(CommandType::PlayerHealth, ResponseType::Float)));
+    file_entry!(PlayerName, "name", read Some(ReadCommand::WithResponse(CommandType::PlayerName, ResponseType::String)));
+    file_entry!(PlayerPosition, "position", read Some(ReadCommand::WithResponse(CommandType::PlayerPosition, ResponseType::Position)));
 
     dir_entry!(WorldDir, "world", []);
     // file_entry!(WorldName, "name");

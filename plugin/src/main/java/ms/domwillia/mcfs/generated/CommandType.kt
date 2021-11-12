@@ -7,7 +7,9 @@ package MCFS
 class CommandType private constructor() {
     companion object {
         const val PlayerHealth: Int = 0
-        val names : Array<String> = arrayOf("PlayerHealth")
+        const val PlayerName: Int = 1
+        const val PlayerPosition: Int = 2
+        val names : Array<String> = arrayOf("PlayerHealth", "PlayerName", "PlayerPosition")
         fun name(e: Int) : String = names[e]
     }
 }

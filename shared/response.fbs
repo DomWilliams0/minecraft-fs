@@ -6,12 +6,19 @@ enum Error:int32 {
 	NoGame
 }
 
+struct Vec3 {
+    x:double;
+    y:double;
+    z:double;
+}
+
 table Response {
 	error:Error = null;
 
 	float:float = null;
 	int:int = null;
 	string:string;
+	pos:Vec3;
 }
 
 

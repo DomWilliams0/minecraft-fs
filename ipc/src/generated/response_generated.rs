@@ -110,6 +110,156 @@ pub mod mcfs {
     }
 
     impl flatbuffers::SimpleToVerifyInSlice for Error {}
+    // struct Vec3, aligned to 8
+    #[repr(transparent)]
+    #[derive(Clone, Copy, PartialEq)]
+    pub struct Vec3(pub [u8; 24]);
+    impl Default for Vec3 {
+        fn default() -> Self {
+            Self([0; 24])
+        }
+    }
+    impl std::fmt::Debug for Vec3 {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.debug_struct("Vec3")
+                .field("x", &self.x())
+                .field("y", &self.y())
+                .field("z", &self.z())
+                .finish()
+        }
+    }
+
+    impl flatbuffers::SimpleToVerifyInSlice for Vec3 {}
+    impl flatbuffers::SafeSliceAccess for Vec3 {}
+    impl<'a> flatbuffers::Follow<'a> for Vec3 {
+        type Inner = &'a Vec3;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            <&'a Vec3>::follow(buf, loc)
+        }
+    }
+    impl<'a> flatbuffers::Follow<'a> for &'a Vec3 {
+        type Inner = &'a Vec3;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            flatbuffers::follow_cast_ref::<Vec3>(buf, loc)
+        }
+    }
+    impl<'b> flatbuffers::Push for Vec3 {
+        type Output = Vec3;
+        #[inline]
+        fn push(&self, dst: &mut [u8], _rest: &[u8]) {
+            let src = unsafe {
+                ::std::slice::from_raw_parts(self as *const Vec3 as *const u8, Self::size())
+            };
+            dst.copy_from_slice(src);
+        }
+    }
+    impl<'b> flatbuffers::Push for &'b Vec3 {
+        type Output = Vec3;
+
+        #[inline]
+        fn push(&self, dst: &mut [u8], _rest: &[u8]) {
+            let src = unsafe {
+                ::std::slice::from_raw_parts(*self as *const Vec3 as *const u8, Self::size())
+            };
+            dst.copy_from_slice(src);
+        }
+    }
+
+    impl<'a> flatbuffers::Verifiable for Vec3 {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.in_buffer::<Self>(pos)
+        }
+    }
+    impl<'a> Vec3 {
+        #[allow(clippy::too_many_arguments)]
+        pub fn new(x: f64, y: f64, z: f64) -> Self {
+            let mut s = Self([0; 24]);
+            s.set_x(x);
+            s.set_y(y);
+            s.set_z(z);
+            s
+        }
+
+        pub fn x(&self) -> f64 {
+            let mut mem = core::mem::MaybeUninit::<f64>::uninit();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    self.0[0..].as_ptr(),
+                    mem.as_mut_ptr() as *mut u8,
+                    core::mem::size_of::<f64>(),
+                );
+                mem.assume_init()
+            }
+            .from_little_endian()
+        }
+
+        pub fn set_x(&mut self, x: f64) {
+            let x_le = x.to_little_endian();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &x_le as *const f64 as *const u8,
+                    self.0[0..].as_mut_ptr(),
+                    core::mem::size_of::<f64>(),
+                );
+            }
+        }
+
+        pub fn y(&self) -> f64 {
+            let mut mem = core::mem::MaybeUninit::<f64>::uninit();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    self.0[8..].as_ptr(),
+                    mem.as_mut_ptr() as *mut u8,
+                    core::mem::size_of::<f64>(),
+                );
+                mem.assume_init()
+            }
+            .from_little_endian()
+        }
+
+        pub fn set_y(&mut self, x: f64) {
+            let x_le = x.to_little_endian();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &x_le as *const f64 as *const u8,
+                    self.0[8..].as_mut_ptr(),
+                    core::mem::size_of::<f64>(),
+                );
+            }
+        }
+
+        pub fn z(&self) -> f64 {
+            let mut mem = core::mem::MaybeUninit::<f64>::uninit();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    self.0[16..].as_ptr(),
+                    mem.as_mut_ptr() as *mut u8,
+                    core::mem::size_of::<f64>(),
+                );
+                mem.assume_init()
+            }
+            .from_little_endian()
+        }
+
+        pub fn set_z(&mut self, x: f64) {
+            let x_le = x.to_little_endian();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &x_le as *const f64 as *const u8,
+                    self.0[16..].as_mut_ptr(),
+                    core::mem::size_of::<f64>(),
+                );
+            }
+        }
+    }
+
     pub enum ResponseOffset {}
     #[derive(Copy, Clone, PartialEq)]
 
@@ -138,6 +288,9 @@ pub mod mcfs {
             args: &'args ResponseArgs<'args>,
         ) -> flatbuffers::WIPOffset<Response<'bldr>> {
             let mut builder = ResponseBuilder::new(_fbb);
+            if let Some(x) = args.pos {
+                builder.add_pos(x);
+            }
             if let Some(x) = args.string {
                 builder.add_string(x);
             }
@@ -157,6 +310,7 @@ pub mod mcfs {
         pub const VT_FLOAT: flatbuffers::VOffsetT = 6;
         pub const VT_INT: flatbuffers::VOffsetT = 8;
         pub const VT_STRING: flatbuffers::VOffsetT = 10;
+        pub const VT_POS: flatbuffers::VOffsetT = 12;
 
         #[inline]
         pub fn error(&self) -> Option<Error> {
@@ -174,6 +328,10 @@ pub mod mcfs {
         pub fn string(&self) -> Option<&'a str> {
             self._tab
                 .get::<flatbuffers::ForwardsUOffset<&str>>(Response::VT_STRING, None)
+        }
+        #[inline]
+        pub fn pos(&self) -> Option<&'a Vec3> {
+            self._tab.get::<Vec3>(Response::VT_POS, None)
         }
     }
 
@@ -193,6 +351,7 @@ pub mod mcfs {
                     Self::VT_STRING,
                     false,
                 )?
+                .visit_field::<Vec3>(&"pos", Self::VT_POS, false)?
                 .finish();
             Ok(())
         }
@@ -202,6 +361,7 @@ pub mod mcfs {
         pub float: Option<f32>,
         pub int: Option<i32>,
         pub string: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub pos: Option<&'a Vec3>,
     }
     impl<'a> Default for ResponseArgs<'a> {
         #[inline]
@@ -211,6 +371,7 @@ pub mod mcfs {
                 float: None,
                 int: None,
                 string: None,
+                pos: None,
             }
         }
     }
@@ -238,6 +399,10 @@ pub mod mcfs {
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Response::VT_STRING, string);
         }
         #[inline]
+        pub fn add_pos(&mut self, pos: &Vec3) {
+            self.fbb_.push_slot_always::<&Vec3>(Response::VT_POS, pos);
+        }
+        #[inline]
         pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> ResponseBuilder<'a, 'b> {
             let start = _fbb.start_table();
             ResponseBuilder {
@@ -259,6 +424,7 @@ pub mod mcfs {
             ds.field("float", &self.float());
             ds.field("int", &self.int());
             ds.field("string", &self.string());
+            ds.field("pos", &self.pos());
             ds.finish()
         }
     }

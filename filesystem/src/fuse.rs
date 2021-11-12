@@ -125,12 +125,11 @@ impl fuser::Filesystem for MinecraftFs {
 
 fn ipc_error_code(err: &IpcError) -> i32 {
     match err {
-        IpcError::NoCurrentGame => libc::EOPNOTSUPP,
+        IpcError::NoCurrentGame | IpcError::ClientError(_) => libc::EOPNOTSUPP,
         IpcError::NotFound => libc::ENOENT,
         IpcError::Connecting(_) | IpcError::SendingCommand(_) | IpcError::ReadingResponse(_) => {
             libc::EIO
         }
-        IpcError::ClientError(_) => libc::EFAULT,
         IpcError::UnexpectedResponse(_) => libc::EINVAL,
     }
 }

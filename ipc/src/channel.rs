@@ -122,12 +122,22 @@ impl IpcChannel {
                 response.float(),
                 response.int(),
                 response.string(),
+                response.pos(),
             ) {
-                (ResponseType::Float, Some(val), None, None) => Ok(ResponseBody::Float(val)),
-                (ResponseType::Integer, None, Some(val), None) => Ok(ResponseBody::Integer(val)),
+                (ResponseType::Float, Some(val), None, None, None) => Ok(ResponseBody::Float(val)),
+                (ResponseType::Integer, None, Some(val), None, None) => {
+                    Ok(ResponseBody::Integer(val))
+                }
                 // TODO dont clone string
-                (ResponseType::String, None, None, Some(val)) => {
+                (ResponseType::String, None, None, Some(val), None) => {
                     Ok(ResponseBody::String(val.to_owned()))
+                }
+                (ResponseType::Position, None, None, None, Some(val)) => {
+                    Ok(ResponseBody::Position {
+                        x: val.x(),
+                        y: val.y(),
+                        z: val.z(),
+                    })
                 }
                 _ => Err(IpcError::UnexpectedResponse(resp_type)),
             }

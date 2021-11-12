@@ -1,13 +1,12 @@
 package ms.domwillia.mcfs.ipc
 
-import MCFS.Command
-import MCFS.CommandType
-import MCFS.Error
-import MCFS.Response
+import MCFS.*
 import com.google.flatbuffers.FlatBufferBuilder
 import ms.domwillia.mcfs.MinecraftFsMod
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.network.ClientPlayerEntity
+import net.minecraft.util.math.Vec3d
+import net.minecraft.util.math.Vec3f
 import java.nio.ByteBuffer
 
 class NoGameException : Exception()
@@ -34,6 +33,8 @@ class CommandExecutor(private val responseBuilder: FlatBufferBuilder) {
     private fun dewIt(command: Command): Int {
         return when (command.cmd) {
             CommandType.PlayerHealth -> mkFloat(thePlayer.health)
+            CommandType.PlayerName -> mkString(MinecraftClient.getInstance().session.username)
+            CommandType.PlayerPosition -> mkPosition(thePlayer.pos)
             else -> {
                 MinecraftFsMod.LOGGER.warn("Unknown command '$command'")
                 mkError(Error.UnknownCommand)
@@ -55,6 +56,20 @@ class CommandExecutor(private val responseBuilder: FlatBufferBuilder) {
     private fun mkFloat(float: Float): Int {
         Response.startResponse(responseBuilder)
         Response.addFloat(responseBuilder, float)
+        return Response.endResponse(responseBuilder)
+    }
+
+    private fun mkString(string: String): Int {
+        val s = responseBuilder.createString(string)
+        Response.startResponse(responseBuilder)
+        Response.addString(responseBuilder, s)
+        return Response.endResponse(responseBuilder)
+    }
+
+    private fun mkPosition(pos: Vec3d): Int {
+        val v = Vec3.createVec3(responseBuilder, pos.x, pos.y, pos.z)
+        Response.startResponse(responseBuilder)
+        Response.addPos(responseBuilder, v)
         return Response.endResponse(responseBuilder)
     }
 }

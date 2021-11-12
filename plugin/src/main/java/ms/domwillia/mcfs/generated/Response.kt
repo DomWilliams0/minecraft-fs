@@ -39,6 +39,15 @@ class Response : Table() {
         }
     val stringAsByteBuffer : ByteBuffer get() = __vector_as_bytebuffer(10, 1)
     fun stringInByteBuffer(_bb: ByteBuffer) : ByteBuffer = __vector_in_bytebuffer(_bb, 10, 1)
+    val pos : MCFS.Vec3? get() = pos(MCFS.Vec3())
+    fun pos(obj: MCFS.Vec3) : MCFS.Vec3? {
+        val o = __offset(12)
+        return if (o != 0) {
+            obj.__assign(o + bb_pos, bb)
+        } else {
+            null
+        }
+    }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_2_0_0()
         fun getRootAsResponse(_bb: ByteBuffer): Response = getRootAsResponse(_bb, Response())
@@ -46,19 +55,12 @@ class Response : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createResponse(builder: FlatBufferBuilder, error: Int?, float: Float?, int: Int?, stringOffset: Int) : Int {
-            builder.startTable(4)
-            addString(builder, stringOffset)
-            int?.run { addInt(builder, int) }
-            float?.run { addFloat(builder, float) }
-            error?.run { addError(builder, error) }
-            return endResponse(builder)
-        }
-        fun startResponse(builder: FlatBufferBuilder) = builder.startTable(4)
+        fun startResponse(builder: FlatBufferBuilder) = builder.startTable(5)
         fun addError(builder: FlatBufferBuilder, error: Int) = builder.addInt(0, error, 0)
         fun addFloat(builder: FlatBufferBuilder, float: Float) = builder.addFloat(1, float, 0.0)
         fun addInt(builder: FlatBufferBuilder, int: Int) = builder.addInt(2, int, 0)
         fun addString(builder: FlatBufferBuilder, string: Int) = builder.addOffset(3, string, 0)
+        fun addPos(builder: FlatBufferBuilder, pos: Int) = builder.addStruct(4, pos, 0)
         fun endResponse(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

@@ -1,18 +1,17 @@
 use crate::generated::CommandType;
 use std::fmt::{Debug, Display, Formatter};
 
-// TODO define as a protobuf for use in plugin/mod
-
 #[derive(Debug, Copy, Clone)]
 pub enum ResponseType {
     Integer,
     String,
     Float,
+    Position,
 }
 
 pub enum ReadCommand {
     WithResponse(CommandType, ResponseType),
-    // TODO WithoutResponse
+    // TODO WithoutResponse?
 }
 
 pub enum ResponseBody {
@@ -20,6 +19,7 @@ pub enum ResponseBody {
     Integer(i32),
     Float(f32),
     String(String),
+    Position { x: f64, y: f64, z: f64 },
 }
 
 impl Display for ResponseBody {
@@ -29,6 +29,7 @@ impl Display for ResponseBody {
             ResponseBody::Float(val) => Debug::fmt(val, f),
             ResponseBody::Integer(val) => Display::fmt(val, f),
             ResponseBody::String(val) => Display::fmt(val, f),
+            ResponseBody::Position { x, y, z } => write!(f, "{:?}\n{:?}\n{:?}", x, y, z),
         }
     }
 }
