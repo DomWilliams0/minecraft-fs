@@ -5,11 +5,17 @@ import com.google.flatbuffers.FlatBufferBuilder
 import ms.domwillia.mcfs.MinecraftFsMod
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.network.ClientPlayerEntity
+import net.minecraft.entity.Entity
+import net.minecraft.entity.LivingEntity
 import net.minecraft.util.math.Box
 import net.minecraft.util.math.Vec3d
 import java.nio.ByteBuffer
 
 class NoGameException : Exception()
+class MissingTargetEntityException : Exception()
+class NotLivingException : Exception()
+class UnknownEntityException(val id: Int) : Exception()
+
 
 @ExperimentalUnsignedTypes
 class Executor(private val responseBuilder: FlatBufferBuilder) {
@@ -24,6 +30,12 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                     executeCommand(request.body(Command()) as Command)
                 } catch (_: NoGameException) {
                     mkError(Error.NoGame)
+                } catch (_: MissingTargetEntityException) {
+                    MinecraftFsMod.LOGGER.error("missing target entity")
+                    mkError(Error.MalformedRequest)
+                } catch (e: UnknownEntityException) {
+                    MinecraftFsMod.LOGGER.error("no such entity ${e.id}")
+                    mkError(Error.NoSuchEntity)
                 } catch (e: Exception) {
                     MinecraftFsMod.LOGGER.catching(e)
                     mkError(Error.Unknown)
@@ -48,9 +60,10 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
     private fun executeCommand(command: Command): Int {
         MinecraftFsMod.LOGGER.info("Executing command '${CommandType.name(command.cmd)}'")
         return when (command.cmd) {
-            CommandType.PlayerHealth -> mkFloat(thePlayer.health)
             CommandType.PlayerName -> mkString(MinecraftClient.getInstance().session.username)
-            CommandType.PlayerPosition -> mkPosition(thePlayer.pos)
+            CommandType.EntityType -> mkString(getTargetEntity(command).type.toString())
+            CommandType.EntityHealth -> mkFloat(getTargetLivingEntity(command).health)
+            CommandType.EntityPosition -> mkPosition(getTargetEntity(command).pos)
             else -> {
                 MinecraftFsMod.LOGGER.warn("Unknown command '$command'")
                 mkError(Error.UnknownCommand)
@@ -111,5 +124,15 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
         Response.startResponse(responseBuilder)
         Response.addPos(responseBuilder, v)
         return Response.endResponse(responseBuilder)
+    }
+
+    private fun getTargetEntity(command: Command): Entity {
+        val id = command.targetEntity ?: throw  MissingTargetEntityException();
+        val world = MinecraftClient.getInstance().world ?: throw NoGameException()
+        return world.getEntityById(id) ?: throw UnknownEntityException(id)
+    }
+
+    private fun getTargetLivingEntity(command: Command): LivingEntity {
+        return getTargetEntity(command) as? LivingEntity? ?: throw NotLivingException()
     }
 }

@@ -32,6 +32,23 @@ mod structure {
             }}
         };
     }
+    macro_rules! entity_file_entry {
+        ($ty:ident, $cmd:expr, $resp:expr) => {
+            struct $ty(i32);
+
+            impl FileEntry for $ty {
+                fn read(&self) -> Option<ReadCommand> {
+                    Some(ReadCommand::Stateful(
+                        CommandArgs {
+                            cmd: $cmd,
+                            target_entity: Some(self.0),
+                        },
+                        $resp,
+                    ))
+                }
+            }
+        };
+    }
 
     macro_rules! dir_entry {
         ($vis:vis $ty:ident, $name:expr) => {
@@ -156,16 +173,10 @@ mod structure {
                 Entry::file(EntityType(self.0)),
             ));
 
-    struct EntityType(i32);
-    impl FileEntry for EntityType {
-        fn read(&self) -> Option<ReadCommand> {
-            Some(ReadCommand::Stateful(
-                CommandArgs {
-                    cmd: CommandType::EntityType,
-                    target_entity: Some(self.0),
-                },
-                ResponseType::String,
-            ))
+            children_out.push(FilesystemEntry::new(
+                OsStr::new("health"),
+                Entry::file(EntityHealth(self.0)),
+            ));
         }
     }
 

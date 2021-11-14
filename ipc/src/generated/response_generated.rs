@@ -24,14 +24,19 @@ pub mod mcfs {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_ERROR: i32 = 2;
+    pub const ENUM_MAX_ERROR: i32 = 4;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_ERROR: [Error; 3] =
-        [Error::Unknown, Error::UnknownCommand, Error::NoGame];
+    pub const ENUM_VALUES_ERROR: [Error; 5] = [
+        Error::Unknown,
+        Error::UnknownCommand,
+        Error::NoGame,
+        Error::MalformedRequest,
+        Error::NoSuchEntity,
+    ];
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
     #[repr(transparent)]
@@ -41,17 +46,26 @@ pub mod mcfs {
         pub const Unknown: Self = Self(0);
         pub const UnknownCommand: Self = Self(1);
         pub const NoGame: Self = Self(2);
+        pub const MalformedRequest: Self = Self(3);
+        pub const NoSuchEntity: Self = Self(4);
 
         pub const ENUM_MIN: i32 = 0;
-        pub const ENUM_MAX: i32 = 2;
-        pub const ENUM_VALUES: &'static [Self] =
-            &[Self::Unknown, Self::UnknownCommand, Self::NoGame];
+        pub const ENUM_MAX: i32 = 4;
+        pub const ENUM_VALUES: &'static [Self] = &[
+            Self::Unknown,
+            Self::UnknownCommand,
+            Self::NoGame,
+            Self::MalformedRequest,
+            Self::NoSuchEntity,
+        ];
         /// Returns the variant's name or "" if unknown.
         pub fn variant_name(self) -> Option<&'static str> {
             match self {
                 Self::Unknown => Some("Unknown"),
                 Self::UnknownCommand => Some("UnknownCommand"),
                 Self::NoGame => Some("NoGame"),
+                Self::MalformedRequest => Some("MalformedRequest"),
+                Self::NoSuchEntity => Some("NoSuchEntity"),
                 _ => None,
             }
         }

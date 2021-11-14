@@ -5,6 +5,8 @@ enum CommandType:int32 {
 	PlayerName,
 	PlayerPosition,
 	EntityType,
+	EntityPosition,
+	EntityHealth,
 }
 
 table Command {

@@ -3,7 +3,9 @@ namespace MCFS;
 enum Error:int32 {
     Unknown,
     UnknownCommand,
-	NoGame
+	NoGame,
+	MalformedRequest,
+	NoSuchEntity
 }
 
 struct Vec3 {

@@ -24,17 +24,19 @@ pub mod mcfs {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_COMMAND_TYPE: i32 = 3;
+    pub const ENUM_MAX_COMMAND_TYPE: i32 = 5;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 4] = [
+    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 6] = [
         CommandType::PlayerHealth,
         CommandType::PlayerName,
         CommandType::PlayerPosition,
         CommandType::EntityType,
+        CommandType::EntityPosition,
+        CommandType::EntityHealth,
     ];
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -46,14 +48,18 @@ pub mod mcfs {
         pub const PlayerName: Self = Self(1);
         pub const PlayerPosition: Self = Self(2);
         pub const EntityType: Self = Self(3);
+        pub const EntityPosition: Self = Self(4);
+        pub const EntityHealth: Self = Self(5);
 
         pub const ENUM_MIN: i32 = 0;
-        pub const ENUM_MAX: i32 = 3;
+        pub const ENUM_MAX: i32 = 5;
         pub const ENUM_VALUES: &'static [Self] = &[
             Self::PlayerHealth,
             Self::PlayerName,
             Self::PlayerPosition,
             Self::EntityType,
+            Self::EntityPosition,
+            Self::EntityHealth,
         ];
         /// Returns the variant's name or "" if unknown.
         pub fn variant_name(self) -> Option<&'static str> {
@@ -62,6 +68,8 @@ pub mod mcfs {
                 Self::PlayerName => Some("PlayerName"),
                 Self::PlayerPosition => Some("PlayerPosition"),
                 Self::EntityType => Some("EntityType"),
+                Self::EntityPosition => Some("EntityPosition"),
+                Self::EntityHealth => Some("EntityHealth"),
                 _ => None,
             }
         }
