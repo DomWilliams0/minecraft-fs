@@ -1,14 +1,12 @@
 use crate::state::{CachedGameState, GameStateInterest};
-use crate::structure::{Entry, EntryFilterResult, FilesystemStructure};
+use crate::structure::{Entry, EntryFilterResult, EntryRef, FilesystemStructure, InodePool};
 use fuser::{FileAttr, FileType, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
 use ipc::{IpcChannel, IpcError};
 use log::*;
-use parking_lot::Mutex;
 
 use std::ffi::OsStr;
 use std::fmt::Write;
 
-use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 pub struct MinecraftFs {
@@ -17,7 +15,7 @@ pub struct MinecraftFs {
     structure: FilesystemStructure,
     ipc: IpcChannel,
     state: CachedGameState,
-    interest: Arc<Mutex<GameStateInterest>>,
+    inodes: InodePool,
 }
 
 // TODO this might be able to be much longer
@@ -112,14 +110,13 @@ impl fuser::Filesystem for MinecraftFs {
 
         let dir = match self.structure.lookup_inode(ino) {
             Some(Entry::Dir(dir)) => &**dir,
-            _ => {
-                reply.error(libc::ENOENT);
-                return;
-            }
+            _ => return reply.error(libc::ENOENT),
         };
 
-        // TODO update state interest
-        let state = match self.state.get(&mut self.ipc) {
+        let mut interest = GameStateInterest::default();
+        dir.register_interest(&mut interest);
+
+        let state = match self.state.get(&mut self.ipc, interest) {
             Ok(state) => state,
             Err(err) => {
                 log::error!("failed to fetch game state: {}", err);
@@ -127,25 +124,60 @@ impl fuser::Filesystem for MinecraftFs {
             }
         };
 
+        let (dynamic_inodes, dynamic_children) =
+            self.structure
+                .dynamic_children(ino, &mut self.inodes, state);
+
+        enum Child {
+            Static(EntryRef),
+            Dynamic(u64),
+        }
+
+        let all_children = {
+            let dir = self
+                .structure
+                .lookup_inode(ino)
+                .and_then(|e| e.as_dir())
+                .unwrap(); // checked above
+            let statics = dir.children().iter().cloned().map(Child::Static);
+            let dynamics = dynamic_inodes.iter().copied().map(Child::Dynamic);
+            statics.chain(dynamics)
+        };
+
         let offset = offset as usize;
         let mut last_filter = None;
-        for (i, child) in dir.children().iter().skip(offset).enumerate() {
-            if let Some(EntryFilterResult::IncludeAllChildren) = last_filter {
-                // dont bother filtering
-            } else {
-                let filtered = child.filter(state);
-                let skip = matches!(filtered, EntryFilterResult::Exclude);
-                last_filter = Some(filtered);
-                if skip {
-                    continue;
-                }
-            }
+        for (i, child) in all_children.skip(offset).enumerate() {
+            let entry = match child {
+                Child::Dynamic(inode) => self
+                    .structure
+                    .lookup_inode_entry(inode, &dynamic_children)
+                    .expect("unregistered dynamic child inode"),
+                Child::Static(e) => {
+                    if let Some(EntryFilterResult::IncludeAllChildren) = last_filter {
+                        // dont bother filtering
+                    } else {
+                        let filtered = e.filter(state);
+                        let skip = matches!(filtered, EntryFilterResult::Exclude);
+                        last_filter = Some(filtered);
+                        if skip {
+                            continue;
+                        }
+                    }
 
-            let entry = self.structure.lookup_entry(child);
+                    self.structure.lookup_entry(&e)
+                }
+            };
+
             if reply.add(ino, (offset + i + 1) as i64, entry.kind(), entry.name()) {
                 break;
             }
         }
+
+        // register newly created dynamic children after we have dropped the borrowed references to
+        // self.structure
+        drop(dynamic_inodes);
+        self.structure
+            .register_dynamic_children(ino, dynamic_children);
 
         reply.ok();
     }
@@ -173,16 +205,15 @@ impl MinecraftFs {
             gid = libc::getgid();
         }
 
-        let interest = Arc::new(Mutex::new(GameStateInterest::default()));
-        let state = CachedGameState::new(interest.clone());
+        let (structure, inodes) = FilesystemStructure::new();
 
         Self {
             uid,
             gid,
-            structure: FilesystemStructure::new(),
+            structure,
+            inodes,
             ipc,
-            interest,
-            state,
+            state: CachedGameState::default(),
         }
     }
 

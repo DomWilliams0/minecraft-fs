@@ -1,13 +1,19 @@
+mod inode;
 mod registry;
-pub use registry::{Entry, EntryFilterResult, FilesystemStructure};
+
+pub use inode::InodePool;
+pub use registry::{Entry, EntryFilterResult, EntryRef, FilesystemEntry, FilesystemStructure};
 
 mod structure {
     #![allow(clippy::module_inception)]
 
     use super::*;
     use crate::state::GameState;
+    use crate::structure::registry::FilesystemEntry;
+
     use ipc::{generated::CommandType, ReadCommand, ResponseType};
     use registry::{DirEntry, EntryRef, FileEntry, Registration};
+    use std::ffi::OsString;
 
     macro_rules! file_entry {
         ($ty:ident, $name:expr) => {
@@ -20,29 +26,21 @@ mod structure {
 
             inventory::submit! { Registration {
                 name: $name,
-                children: &[],
                 entry_fn: $ty::entry,
             }}
         };
     }
 
     macro_rules! dir_entry {
-        ($vis:vis $ty:ident, $name:expr, $children:expr) => {
+        ($vis:vis $ty:ident, $name:expr) => {
             $vis struct $ty;
 
             impl $ty {
                 fn entry() -> Entry { Entry::dir(Self) }
             }
 
-            impl DirEntry for $ty {
-                fn children(&self) -> &'static [EntryRef] {
-                    &$children
-                }
-            }
-
             inventory::submit! { Registration {
                 name: $name,
-                children: &$children,
                 entry_fn: $ty::entry,
             }}
         };
@@ -50,19 +48,26 @@ mod structure {
 
     dir_entry!(
         pub Root,
-        "",
-        [EntryRef::Dir(&PlayerDir), EntryRef::Dir(&WorldDir)]
+        ""
     );
 
-    dir_entry!(
-        PlayerDir,
-        "player",
-        [
-            EntryRef::File(&PlayerHealth),
-            EntryRef::File(&PlayerName),
-            EntryRef::File(&PlayerPosition)
-        ]
-    );
+    impl DirEntry for Root {
+        fn children(&self) -> &'static [EntryRef] {
+            &[EntryRef::Dir(&PlayerDir), EntryRef::Dir(&EntitiesDir)]
+        }
+    }
+
+    dir_entry!(PlayerDir, "player");
+
+    impl DirEntry for PlayerDir {
+        fn children(&self) -> &'static [EntryRef] {
+            &[
+                EntryRef::File(&PlayerHealth),
+                EntryRef::File(&PlayerName),
+                EntryRef::File(&PlayerPosition),
+            ]
+        }
+    }
 
     file_entry!(PlayerHealth, "health");
     impl FileEntry for PlayerHealth {
@@ -102,6 +107,44 @@ mod structure {
         }
     }
 
-    dir_entry!(WorldDir, "world", []);
+    // dir_entry!(WorldDir, "world");
     // file_entry!(WorldName, "name");
+
+    dir_entry!(EntitiesDir, "entities");
+    impl DirEntry for EntitiesDir {
+        fn children(&self) -> &'static [EntryRef] {
+            &[EntryRef::Dir(&EntitiesByTypeDir)]
+        }
+    }
+
+    dir_entry!(EntitiesByTypeDir, "by-type");
+    impl DirEntry for EntitiesByTypeDir {
+        fn children(&self) -> &'static [EntryRef] {
+            &[]
+        }
+
+        fn dynamic_children(&self, children_out: &mut Vec<FilesystemEntry>, state: &GameState) {
+            children_out.extend((1..4).map(|i| {
+                FilesystemEntry::new(
+                    OsString::from(format!("dynamic-boi-{}", i)).into(),
+                    Entry::dir(DynamicTest(i)),
+                )
+            }));
+        }
+    }
+
+    struct DynamicTest(u32);
+
+    impl DirEntry for DynamicTest {
+        fn children(&self) -> &'static [EntryRef] {
+            &[EntryRef::File(&MyThing)]
+        }
+    }
+
+    file_entry!(MyThing, "cool");
+    impl FileEntry for MyThing {
+        fn read(&self) -> Option<ReadCommand> {
+            None
+        }
+    }
 }

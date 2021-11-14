@@ -1,12 +1,18 @@
-use crate::state::GameState;
+use crate::state::{GameState, GameStateInterest};
+use crate::structure::inode::InodePool;
 use crate::structure::structure::Root;
 use ipc::ReadCommand;
+use parking_lot::{Mutex, MutexGuard};
 use smallvec::SmallVec;
 use std::any::{Any, TypeId};
 use std::borrow::Cow;
+
 use std::collections::HashMap;
 use std::ffi::OsStr;
+
+use std::ops::Deref;
 use std::os::unix::ffi::OsStrExt;
+use std::sync::Arc;
 
 pub struct FilesystemStructure {
     // TODO faster lookup structure and/or perfect hash
@@ -19,6 +25,9 @@ pub struct FilesystemStructure {
 
     /// (parent inode, first 4 bytes of osstr file name) -> children inodes
     child_registry: HashMap<(u64, u32), SmallVec<[u64; 2]>>,
+
+    /// parent inode -> dynamic entries inodes
+    dynamic_child_registry: Arc<Mutex<HashMap<u64, Vec<u64>>>>,
 }
 
 pub struct FilesystemEntry {
@@ -31,23 +40,30 @@ pub enum Entry {
     Dir(Box<dyn DirEntry>),
 }
 
+#[derive(Clone)]
 pub enum EntryRef {
     File(&'static dyn FileEntry),
     Dir(&'static dyn DirEntry),
 }
 
+#[allow(unused_variables)]
 pub trait DirEntry: Send + Sync + Any {
     fn children(&self) -> &'static [EntryRef];
 
-    fn filter(&self, _state: &GameState) -> EntryFilterResult {
+    fn dynamic_children(&self, children_out: &mut Vec<FilesystemEntry>, state: &GameState) {}
+
+    fn filter(&self, state: &GameState) -> EntryFilterResult {
         EntryFilterResult::IncludeSelf
     }
+
+    fn register_interest(&self, interest: &mut GameStateInterest) {}
 }
 
+#[allow(unused_variables)]
 pub trait FileEntry: Send + Sync + Any {
     fn read(&self) -> Option<ReadCommand>;
 
-    fn should_include(&self, _state: &GameState) -> bool {
+    fn should_include(&self, state: &GameState) -> bool {
         true
     }
 }
@@ -59,7 +75,6 @@ struct StructureBuilder {
 
 pub struct Registration {
     pub name: &'static str,
-    pub children: &'static [EntryRef],
     pub entry_fn: fn() -> Entry,
 }
 
@@ -70,6 +85,12 @@ pub enum EntryFilterResult {
     IncludeSelf,
     IncludeAllChildren,
     Exclude,
+}
+
+pub enum DynamicChildrenCreation {
+    None,
+    AlreadyExisted,
+    NewlyCreated(Vec<(u64, FilesystemEntry)>),
 }
 
 impl StructureBuilder {
@@ -100,33 +121,49 @@ impl StructureBuilder {
 
     fn finish(self) -> FilesystemStructure {
         let mut child_registry = HashMap::new();
+        populate_children(
+            &self.registry,
+            &self.ty_registry,
+            &mut child_registry,
+            self.registry.keys().copied(),
+        );
 
-        for (parent_inode, entry) in self.registry.iter() {
-            if let Entry::Dir(dir) = &entry.entry {
-                for child in dir.children() {
-                    let (child_inode, child) =
-                        lookup_entry(child, &self.registry, &self.ty_registry);
-                    let child_prefix = name_prefix(child.name());
-
-                    use std::collections::hash_map::Entry as MapEntry;
-                    let children = match child_registry.entry((*parent_inode, child_prefix)) {
-                        MapEntry::Occupied(entries) => entries.into_mut(),
-                        MapEntry::Vacant(entry) => entry.insert(SmallVec::new()),
-                    };
-
-                    children.push(child_inode)
-                }
-            }
-        }
+        let dynamic_registry = Arc::new(Mutex::new(HashMap::new()));
 
         FilesystemStructure {
             registry: self.registry,
             ty_registry: self.ty_registry,
             child_registry,
+            dynamic_child_registry: dynamic_registry,
         }
     }
 }
+fn populate_children(
+    registry: &HashMap<u64, FilesystemEntry>,
+    ty_registry: &HashMap<TypeId, u64>,
+    child_registry: &mut HashMap<(u64, u32), SmallVec<[u64; 2]>>,
+    to_register: impl Iterator<Item = u64>,
+) {
+    for parent_inode in to_register {
+        let entry = registry
+            .get(&parent_inode)
+            .expect("unregistered parent inode");
+        if let Entry::Dir(dir) = &entry.entry {
+            for child in dir.children() {
+                let (child_inode, child) = lookup_entry(child, registry, ty_registry);
+                let child_prefix = name_prefix(child.name());
 
+                use std::collections::hash_map::Entry as MapEntry;
+                let children = match child_registry.entry((parent_inode, child_prefix)) {
+                    MapEntry::Occupied(entries) => entries.into_mut(),
+                    MapEntry::Vacant(entry) => entry.insert(SmallVec::new()),
+                };
+
+                children.push(child_inode)
+            }
+        }
+    }
+}
 fn name_prefix(s: &OsStr) -> u32 {
     let mut buf: [u8; 4] = [0; 4];
 
@@ -148,7 +185,7 @@ fn skip_prefix(s: &OsStr) -> &[u8] {
 }
 
 impl FilesystemStructure {
-    pub fn new() -> Self {
+    pub fn new() -> (Self, InodePool) {
         let mut builder = StructureBuilder {
             registry: HashMap::new(),
             ty_registry: HashMap::new(),
@@ -174,11 +211,28 @@ impl FilesystemStructure {
             "wrong root"
         );
 
-        builder.finish()
+        (builder.finish(), InodePool::new_dynamic(inode))
     }
 
     pub fn lookup_inode(&self, inode: u64) -> Option<&Entry> {
         self.registry.get(&inode).map(|e| &e.entry)
+    }
+
+    pub fn lookup_inode_entry<'a>(
+        &'a self,
+        inode: u64,
+        dynamic_children: &'a DynamicChildrenCreation,
+    ) -> Option<&'a FilesystemEntry> {
+        self.registry.get(&inode).or_else(|| {
+            // if dynamic children were just created, they are not yet in the registry, so
+            // search manually
+            if let DynamicChildrenCreation::NewlyCreated(new) = dynamic_children {
+                new.iter()
+                    .find_map(|(i, e)| if *i == inode { Some(e) } else { None })
+            } else {
+                None
+            }
+        })
     }
 
     pub fn lookup_entry(&self, entry: &EntryRef) -> &FilesystemEntry {
@@ -188,6 +242,7 @@ impl FilesystemStructure {
     pub fn lookup_child(&self, parent: u64, name: &OsStr) -> Option<(u64, &Entry)> {
         let child_prefix = name_prefix(name);
 
+        // check static children first
         self.child_registry
             .get(&(parent, child_prefix))
             .and_then(|children| {
@@ -208,9 +263,97 @@ impl FilesystemStructure {
                         }
                     })
             })
+            .or_else(|| {
+                // check dynamic children
+                let reg = self.dynamic_child_registry.lock();
+                reg.get(&parent).and_then(|children| {
+                    children
+                        .iter()
+                        .map(|inode| {
+                            (
+                                *inode,
+                                self.registry.get(inode).expect("unregistered child inode"),
+                            )
+                        })
+                        .find_map(|(inode, e)| {
+                            if e.name == name {
+                                Some((inode, &e.entry))
+                            } else {
+                                None
+                            }
+                        })
+                })
+            })
+    }
+
+    pub fn dynamic_children(
+        &self,
+        parent: u64,
+        inodes: &mut InodePool,
+        state: &GameState,
+    ) -> (impl Deref<Target = [u64]> + '_, DynamicChildrenCreation) {
+        use std::collections::hash_map::Entry;
+
+        let reg = self.dynamic_child_registry.lock();
+        let mut created = DynamicChildrenCreation::None;
+        let inodes = MutexGuard::map(reg, |reg| {
+            match reg.entry(parent) {
+                Entry::Occupied(e) => {
+                    created = DynamicChildrenCreation::AlreadyExisted;
+                    &mut e.into_mut()[..]
+                }
+                Entry::Vacant(e) => {
+                    let mut vec = Vec::new();
+                    let parent_dir = self
+                        .registry
+                        .get(&parent)
+                        .and_then(|e| e.entry.as_dir())
+                        .unwrap(); // must be valid to get this far
+                    parent_dir.dynamic_children(&mut vec, state);
+
+                    if vec.is_empty() {
+                        // no dynamics
+                        created = DynamicChildrenCreation::None;
+                        &mut []
+                    } else {
+                        let child_inodes = vec
+                            .iter()
+                            .map(|_| u64::from(inodes.allocate()))
+                            .collect::<Vec<_>>();
+                        let child_entries =
+                            child_inodes.iter().copied().zip(vec).collect::<Vec<_>>();
+                        created = DynamicChildrenCreation::NewlyCreated(child_entries);
+                        &mut e.insert(child_inodes)[..]
+                    }
+                }
+            }
+        });
+
+        (inodes, created)
+    }
+
+    pub fn register_dynamic_children(&mut self, parent: u64, children: DynamicChildrenCreation) {
+        if let DynamicChildrenCreation::NewlyCreated(entries) = children {
+            let child_inodes = entries.iter().map(|(i, _)| i).copied().collect::<Vec<_>>();
+            log::trace!(
+                "registering dynamic children for parent {}: {:?}",
+                parent,
+                child_inodes
+            );
+            for (inode, e) in entries {
+                self.registry.insert(inode, e);
+            }
+
+            // register static grandchildren for the dynamic children
+            populate_children(
+                &self.registry,
+                &self.ty_registry,
+                &mut self.child_registry,
+                child_inodes.into_iter(),
+            );
+        }
     }
 }
-
 fn lookup_entry<'a>(
     entry: &EntryRef,
     registry: &'a HashMap<u64, FilesystemEntry>,
@@ -240,6 +383,13 @@ impl Entry {
         match self {
             Entry::File(b) => box_typeid(b),
             Entry::Dir(b) => box_typeid(b),
+        }
+    }
+
+    pub fn as_dir(&self) -> Option<&dyn DirEntry> {
+        match self {
+            Entry::Dir(dir) => Some(&**dir),
+            _ => None,
         }
     }
 }
@@ -276,6 +426,10 @@ impl FilesystemEntry {
             Entry::File(_) => fuser::FileType::RegularFile,
             Entry::Dir(_) => fuser::FileType::Directory,
         }
+    }
+
+    pub fn new(name: Cow<'static, OsStr>, entry: Entry) -> Self {
+        Self { name, entry }
     }
 }
 
