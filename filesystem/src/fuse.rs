@@ -1,16 +1,15 @@
 use crate::state::{CachedGameState, GameStateInterest};
 use crate::structure::{Entry, EntryFilterResult, EntryRef, FilesystemStructure, InodePool};
 use fuser::{
-    FileAttr, FileType, KernelConfig, ReplyAttr, ReplyBmap, ReplyCreate, ReplyData, ReplyDirectory,
-    ReplyDirectoryPlus, ReplyEmpty, ReplyEntry, ReplyIoctl, ReplyLock, ReplyLseek, ReplyOpen,
-    ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
+    FileAttr, FileType, ReplyAttr, ReplyData, ReplyDirectory, ReplyDirectoryPlus, ReplyEmpty,
+    ReplyEntry, ReplyIoctl, ReplyLock, ReplyLseek, ReplyOpen, ReplyStatfs, ReplyWrite, ReplyXattr,
+    Request, TimeOrNow,
 };
 use ipc::{IpcChannel, IpcError};
 use log::*;
 
 use std::ffi::OsStr;
 use std::fmt::Write;
-use std::path::Path;
 
 use std::time::{Duration, SystemTime};
 
@@ -29,14 +28,40 @@ const TTL: Duration = Duration::from_secs(1);
 impl fuser::Filesystem for MinecraftFs {
     fn lookup(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEntry) {
         trace!("lookup(parent={}, name={:?})", parent, name);
-        let attr = match self.structure.lookup_child(parent, name) {
-            Some((inode, entry)) => self.mk_attr(inode, entry),
-            _ => {
-                reply.error(libc::ENOENT);
-                return;
+        let (inode, entry) = match self.structure.lookup_child(parent, name) {
+            Some(tup) => tup,
+            None => {
+                if let Some(Entry::Dir(dir)) = self.structure.lookup_inode(parent) {
+                    let mut interest = GameStateInterest::default();
+                    dir.register_interest(&mut interest);
+
+                    let state = match self.state.get(&mut self.ipc, interest) {
+                        Ok(state) => state,
+                        Err(err) => {
+                            log::error!("failed to fetch game state: {}", err);
+                            return reply.error(libc::EIO);
+                        }
+                    };
+
+                    let (_, dynamic_children) =
+                        self.structure
+                            .dynamic_children(parent, &mut self.inodes, state);
+
+                    self.structure
+                        .register_dynamic_children(parent, dynamic_children);
+
+                    // try again now that dynamic children have been registered
+                    match self.structure.lookup_child(parent, name) {
+                        Some(tup) => tup,
+                        None => return reply.error(libc::ENOENT),
+                    }
+                } else {
+                    return reply.error(libc::ENOENT);
+                }
             }
         };
 
+        let attr = self.mk_attr(inode, entry);
         reply.entry(&TTL, &attr, 0);
     }
 

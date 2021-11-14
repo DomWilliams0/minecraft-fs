@@ -14,7 +14,7 @@ mod structure {
     use ipc::generated::CommandArgs;
     use ipc::{generated::CommandType, ReadCommand, ResponseType};
     use registry::{DirEntry, EntryRef, FileEntry, Registration, RegistrationEntryFn};
-    use std::any::{Any, TypeId};
+    use std::any::TypeId;
     use std::ffi::{OsStr, OsString};
 
     macro_rules! file_entry {
