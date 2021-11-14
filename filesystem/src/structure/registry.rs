@@ -38,12 +38,14 @@ pub struct FilesystemEntry {
 pub enum Entry {
     File(Box<dyn FileEntry>),
     Dir(Box<dyn DirEntry>),
+    Link(Box<dyn LinkEntry>),
 }
 
 #[derive(Clone)]
 pub enum EntryRef {
     File(&'static dyn FileEntry),
     Dir(&'static dyn DirEntry),
+    Link(&'static dyn LinkEntry),
 }
 
 #[allow(unused_variables)]
@@ -62,6 +64,15 @@ pub trait DirEntry: Send + Sync + Any {
 #[allow(unused_variables)]
 pub trait FileEntry: Send + Sync + Any {
     fn read(&self) -> Option<ReadCommand>;
+
+    fn should_include(&self, state: &GameState) -> bool {
+        true
+    }
+}
+
+#[allow(unused_variables)]
+pub trait LinkEntry: Send + Sync + Any {
+    fn target(&self, state: &GameState) -> Option<Cow<'static, OsStr>>;
 
     fn should_include(&self, state: &GameState) -> bool {
         true
@@ -381,10 +392,15 @@ impl Entry {
         Entry::Dir(Box::new(t))
     }
 
+    pub fn link<T: LinkEntry + 'static>(t: T) -> Self {
+        Entry::Link(Box::new(t))
+    }
+
     fn entry_typeid(&self) -> TypeId {
         match self {
             Entry::File(b) => box_typeid(b),
             Entry::Dir(b) => box_typeid(b),
+            Entry::Link(b) => box_typeid(b),
         }
     }
 
@@ -401,12 +417,20 @@ impl EntryRef {
         match self {
             EntryRef::File(b) => (*b).type_id(),
             EntryRef::Dir(b) => (*b).type_id(),
+            EntryRef::Link(b) => (*b).type_id(),
         }
     }
 
     pub fn filter(&self, state: &GameState) -> EntryFilterResult {
         match self {
             EntryRef::File(b) => {
+                if b.should_include(state) {
+                    EntryFilterResult::IncludeSelf
+                } else {
+                    EntryFilterResult::Exclude
+                }
+            }
+            EntryRef::Link(b) => {
                 if b.should_include(state) {
                     EntryFilterResult::IncludeSelf
                 } else {
@@ -427,6 +451,7 @@ impl FilesystemEntry {
         match self.entry {
             Entry::File(_) => fuser::FileType::RegularFile,
             Entry::Dir(_) => fuser::FileType::Directory,
+            Entry::Link(_) => fuser::FileType::Symlink,
         }
     }
 

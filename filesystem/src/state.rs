@@ -8,7 +8,7 @@ const CACHE_TIME: Duration = Duration::from_millis(500);
 
 #[derive(Default)]
 pub struct GameState {
-    pub is_in_game: bool,
+    pub player_entity_id: Option<i32>,
     pub entity_ids: Vec<i32>,
 }
 
@@ -27,6 +27,12 @@ impl Default for CachedGameState {
             state: GameState::default(),
             last_interest: GameStateInterest::default(),
         }
+    }
+}
+
+impl GameState {
+    pub fn is_in_game(&self) -> bool {
+        self.player_entity_id.is_some()
     }
 }
 
@@ -50,7 +56,7 @@ impl CachedGameState {
             let response = ipc.send_state_request(&interest)?;
 
             self.state = GameState {
-                is_in_game: response.is_in_game(),
+                player_entity_id: response.player_entity_id(),
                 entity_ids: response
                     .entity_ids()
                     .map(|v| v.into_iter().collect())

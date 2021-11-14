@@ -24,7 +24,8 @@ table Response {
 }
 
 table StateResponse {
-    is_in_game:bool;
+    // null if not in game
+    player_entity_id:int32 = null;
     entity_ids:[int32];
 }
 

@@ -2,7 +2,7 @@ use std::io::{ErrorKind, Read, Write};
 
 use crate::command::{ResponseBody, ResponseType};
 use crate::generated::{
-    root_as_game_response, Command, CommandArgs, CommandType, Error, GameRequest, GameRequestArgs,
+    root_as_game_response, Command, CommandArgs, Error, GameRequest, GameRequestArgs,
     GameRequestBody, GameResponseBody, StateRequest, StateRequestArgs, StateResponse,
 };
 use crate::ReadCommand;

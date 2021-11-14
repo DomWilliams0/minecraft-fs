@@ -9,7 +9,8 @@ mod structure {
 
     use super::*;
     use crate::state::{GameState, GameStateInterest};
-    use crate::structure::registry::FilesystemEntry;
+    use crate::structure::registry::{FilesystemEntry, LinkEntry};
+    use std::borrow::Cow;
 
     use ipc::generated::CommandArgs;
     use ipc::{generated::CommandType, ReadCommand, ResponseType};
@@ -81,24 +82,33 @@ mod structure {
     impl DirEntry for PlayerDir {
         fn children(&self) -> &'static [EntryRef] {
             &[
-                EntryRef::File(&PlayerHealth),
                 EntryRef::File(&PlayerName),
-                EntryRef::File(&PlayerPosition),
+                EntryRef::Link(&PlayerEntityLink),
             ]
         }
     }
 
-    file_entry!(PlayerHealth, "health");
-    impl FileEntry for PlayerHealth {
-        fn read(&self) -> Option<ReadCommand> {
-            Some(ReadCommand::Stateless(
-                CommandType::PlayerHealth,
-                ResponseType::Float,
-            ))
+    struct PlayerEntityLink;
+    impl PlayerEntityLink {
+        fn entry() -> Entry {
+            Entry::link(Self)
+        }
+    }
+    inventory::submit! { Registration {
+        name : "entity" ,
+        entry_fn : PlayerEntityLink :: entry ,
+    } }
+
+    impl LinkEntry for PlayerEntityLink {
+        fn target(&self, state: &GameState) -> Option<Cow<'static, OsStr>> {
+            let id = state.player_entity_id?.to_string();
+            let mut path = OsString::from("../entities/by-id/");
+            path.push(id);
+            Some(path.into())
         }
 
         fn should_include(&self, state: &GameState) -> bool {
-            state.is_in_game
+            state.is_in_game()
         }
     }
 
@@ -112,20 +122,6 @@ mod structure {
         }
     }
 
-    file_entry!(PlayerPosition, "position");
-    impl FileEntry for PlayerPosition {
-        fn read(&self) -> Option<ReadCommand> {
-            Some(ReadCommand::Stateless(
-                CommandType::PlayerPosition,
-                ResponseType::Position,
-            ))
-        }
-
-        fn should_include(&self, state: &GameState) -> bool {
-            state.is_in_game
-        }
-    }
-
     // dir_entry!(WorldDir, "world");
     // file_entry!(WorldName, "name");
 
@@ -136,7 +132,7 @@ mod structure {
         }
 
         fn filter(&self, state: &GameState) -> EntryFilterResult {
-            if !state.is_in_game {
+            if !state.is_in_game() {
                 EntryFilterResult::Exclude
             } else {
                 EntryFilterResult::IncludeAllChildren
@@ -177,10 +173,19 @@ mod structure {
                 OsStr::new("health"),
                 Entry::file(EntityHealth(self.0)),
             ));
+
+            children_out.push(FilesystemEntry::new(
+                OsStr::new("position"),
+                Entry::file(EntityPosition(self.0)),
+            ));
         }
     }
 
     entity_file_entry!(EntityType, CommandType::EntityType, ResponseType::String);
-
     entity_file_entry!(EntityHealth, CommandType::EntityHealth, ResponseType::Float);
+    entity_file_entry!(
+        EntityPosition,
+        CommandType::EntityPosition,
+        ResponseType::Position
+    );
 }

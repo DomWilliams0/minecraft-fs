@@ -1,15 +1,16 @@
 use crate::state::{CachedGameState, GameStateInterest};
 use crate::structure::{Entry, EntryFilterResult, EntryRef, FilesystemStructure, InodePool};
 use fuser::{
-    FileAttr, FileType, ReplyAttr, ReplyData, ReplyDirectory, ReplyDirectoryPlus, ReplyEmpty,
-    ReplyEntry, ReplyIoctl, ReplyLock, ReplyLseek, ReplyOpen, ReplyStatfs, ReplyWrite, ReplyXattr,
-    Request, TimeOrNow,
+    FileAttr, FileType, ReplyAttr, ReplyBmap, ReplyCreate, ReplyData, ReplyDirectory,
+    ReplyDirectoryPlus, ReplyEmpty, ReplyEntry, ReplyIoctl, ReplyLock, ReplyLseek, ReplyOpen,
+    ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
 };
 use ipc::{IpcChannel, IpcError};
 use log::*;
 
 use std::ffi::OsStr;
 use std::fmt::Write;
+use std::os::unix::ffi::OsStrExt;
 
 use std::time::{Duration, SystemTime};
 
@@ -77,6 +78,29 @@ impl fuser::Filesystem for MinecraftFs {
         };
 
         reply.attr(&TTL, &attr);
+    }
+
+    fn readlink(&mut self, _req: &Request<'_>, ino: u64, reply: ReplyData) {
+        trace!("readlink({})", ino);
+
+        match self.structure.lookup_inode(ino) {
+            Some(Entry::Link(link)) => {
+                let interest = GameStateInterest::default();
+                let state = match self.state.get(&mut self.ipc, interest) {
+                    Ok(state) => state,
+                    Err(err) => {
+                        log::error!("failed to fetch game state: {}", err);
+                        return reply.error(libc::EIO);
+                    }
+                };
+
+                let target = link
+                    .target(state)
+                    .unwrap_or_else(|| OsStr::new("/dev/null").into());
+                reply.data(target.as_bytes())
+            }
+            _ => reply.error(libc::ENOENT),
+        }
     }
 
     fn read(
@@ -253,6 +277,7 @@ impl MinecraftFs {
         let (kind, size) = match entry {
             Entry::File(_) => (FileType::RegularFile, 256),
             Entry::Dir(_) => (FileType::Directory, 0),
+            Entry::Link(_) => (FileType::Symlink, 0),
         };
         FileAttr {
             ino,

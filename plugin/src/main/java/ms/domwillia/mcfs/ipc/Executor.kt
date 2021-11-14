@@ -75,8 +75,8 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
         MinecraftFsMod.LOGGER.info("Executing state request")
 
 
+        // null if not in game
         val player = MinecraftClient.getInstance().player
-        val isInGame = player != null
 
         val entityIds = if (player != null && req.entitiesById) {
             val bounds = -10_000.0;
@@ -89,7 +89,10 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
         }
 
         StateResponse.startStateResponse(responseBuilder);
-        StateResponse.addIsInGame(responseBuilder, isInGame);
+        if (player != null) {
+            StateResponse.addPlayerEntityId(responseBuilder, player.id);
+        }
+
         if (entityIds != null) {
             StateResponse.addEntityIds(responseBuilder, entityIds)
         }

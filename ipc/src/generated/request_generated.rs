@@ -24,16 +24,14 @@ pub mod mcfs {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_COMMAND_TYPE: i32 = 5;
+    pub const ENUM_MAX_COMMAND_TYPE: i32 = 3;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 6] = [
-        CommandType::PlayerHealth,
+    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 4] = [
         CommandType::PlayerName,
-        CommandType::PlayerPosition,
         CommandType::EntityType,
         CommandType::EntityPosition,
         CommandType::EntityHealth,
@@ -44,19 +42,15 @@ pub mod mcfs {
     pub struct CommandType(pub i32);
     #[allow(non_upper_case_globals)]
     impl CommandType {
-        pub const PlayerHealth: Self = Self(0);
-        pub const PlayerName: Self = Self(1);
-        pub const PlayerPosition: Self = Self(2);
-        pub const EntityType: Self = Self(3);
-        pub const EntityPosition: Self = Self(4);
-        pub const EntityHealth: Self = Self(5);
+        pub const PlayerName: Self = Self(0);
+        pub const EntityType: Self = Self(1);
+        pub const EntityPosition: Self = Self(2);
+        pub const EntityHealth: Self = Self(3);
 
         pub const ENUM_MIN: i32 = 0;
-        pub const ENUM_MAX: i32 = 5;
+        pub const ENUM_MAX: i32 = 3;
         pub const ENUM_VALUES: &'static [Self] = &[
-            Self::PlayerHealth,
             Self::PlayerName,
-            Self::PlayerPosition,
             Self::EntityType,
             Self::EntityPosition,
             Self::EntityHealth,
@@ -64,9 +58,7 @@ pub mod mcfs {
         /// Returns the variant's name or "" if unknown.
         pub fn variant_name(self) -> Option<&'static str> {
             match self {
-                Self::PlayerHealth => Some("PlayerHealth"),
                 Self::PlayerName => Some("PlayerName"),
-                Self::PlayerPosition => Some("PlayerPosition"),
                 Self::EntityType => Some("EntityType"),
                 Self::EntityPosition => Some("EntityPosition"),
                 Self::EntityHealth => Some("EntityHealth"),
@@ -268,7 +260,7 @@ pub mod mcfs {
         #[inline]
         pub fn cmd(&self) -> CommandType {
             self._tab
-                .get::<CommandType>(Command::VT_CMD, Some(CommandType::PlayerHealth))
+                .get::<CommandType>(Command::VT_CMD, Some(CommandType::PlayerName))
                 .unwrap()
         }
         #[inline]
@@ -299,7 +291,7 @@ pub mod mcfs {
         #[inline]
         fn default() -> Self {
             CommandArgs {
-                cmd: CommandType::PlayerHealth,
+                cmd: CommandType::PlayerName,
                 target_entity: None,
             }
         }
@@ -312,7 +304,7 @@ pub mod mcfs {
         #[inline]
         pub fn add_cmd(&mut self, cmd: CommandType) {
             self.fbb_
-                .push_slot::<CommandType>(Command::VT_CMD, cmd, CommandType::PlayerHealth);
+                .push_slot::<CommandType>(Command::VT_CMD, cmd, CommandType::PlayerName);
         }
         #[inline]
         pub fn add_target_entity(&mut self, target_entity: i32) {

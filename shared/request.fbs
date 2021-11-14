@@ -1,9 +1,7 @@
 namespace MCFS;
 
 enum CommandType:int32 {
-	PlayerHealth,
 	PlayerName,
-	PlayerPosition,
 	EntityType,
 	EntityPosition,
 	EntityHealth,

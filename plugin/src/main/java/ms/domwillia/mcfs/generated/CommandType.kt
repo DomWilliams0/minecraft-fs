@@ -6,13 +6,11 @@ package MCFS
 @ExperimentalUnsignedTypes
 class CommandType private constructor() {
     companion object {
-        const val PlayerHealth: Int = 0
-        const val PlayerName: Int = 1
-        const val PlayerPosition: Int = 2
-        const val EntityType: Int = 3
-        const val EntityPosition: Int = 4
-        const val EntityHealth: Int = 5
-        val names : Array<String> = arrayOf("PlayerHealth", "PlayerName", "PlayerPosition", "EntityType", "EntityPosition", "EntityHealth")
+        const val PlayerName: Int = 0
+        const val EntityType: Int = 1
+        const val EntityPosition: Int = 2
+        const val EntityHealth: Int = 3
+        val names : Array<String> = arrayOf("PlayerName", "EntityType", "EntityPosition", "EntityHealth")
         fun name(e: Int) : String = names[e]
     }
 }
