@@ -75,12 +75,7 @@ struct StructureBuilder {
 
 pub struct Registration {
     pub name: &'static str,
-    pub entry_fn: RegistrationEntryFn,
-}
-
-pub enum RegistrationEntryFn {
-    Static(fn() -> Entry),
-    Dynamic(fn() -> TypeId),
+    pub entry_fn: fn() -> Entry,
 }
 
 inventory::collect!(Registration);
@@ -99,25 +94,24 @@ pub enum DynamicChildrenCreation {
 }
 
 impl StructureBuilder {
-    fn register(&mut self, inode: u64, name: &'static str, instance: Option<Entry>, ty: TypeId) {
+    fn register(&mut self, inode: u64, name: &'static str, instance: Entry) {
         log::debug!("registering inode={}, name={:?}", inode, name);
+        let ty = instance.entry_typeid();
 
-        if let Some(instance) = instance {
-            assert!(
-                self.registry
-                    .insert(
-                        inode,
-                        FilesystemEntry {
-                            name: Cow::Borrowed(name.as_ref()),
-                            entry: instance,
-                        },
-                    )
-                    .is_none(),
-                "duplicate entry for inode {} ({:?})",
-                inode,
-                name
-            );
-        }
+        assert!(
+            self.registry
+                .insert(
+                    inode,
+                    FilesystemEntry {
+                        name: Cow::Borrowed(name.as_ref()),
+                        entry: instance,
+                    },
+                )
+                .is_none(),
+            "duplicate entry for inode {} ({:?})",
+            inode,
+            name
+        );
 
         assert!(
             self.ty_registry.insert(ty, inode).is_none(),
@@ -198,26 +192,18 @@ impl FilesystemStructure {
             ty_registry: HashMap::new(),
         };
 
-        let mut inode = 2;
+        let mut next_inode = 2;
         for reg in inventory::iter::<Registration> {
             let my_inode = if reg.name.is_empty() {
                 // must be root
                 1
             } else {
-                let curr = inode;
-                inode += 1;
+                let curr = next_inode;
+                next_inode += 1;
                 curr
             };
 
-            let (instance, ty) = match reg.entry_fn {
-                RegistrationEntryFn::Static(f) => {
-                    let entry = (f)();
-                    let ty = entry.entry_typeid();
-                    (Some(entry), ty)
-                }
-                RegistrationEntryFn::Dynamic(t) => (None, (t)()),
-            };
-            builder.register(my_inode, reg.name, instance, ty);
+            builder.register(my_inode, reg.name, (reg.entry_fn)());
         }
 
         let root = builder.registry.get(&1).expect("missing root dir");
@@ -227,7 +213,7 @@ impl FilesystemStructure {
             "wrong root"
         );
 
-        (builder.finish(), InodePool::new_dynamic(inode))
+        (builder.finish(), InodePool::new_dynamic(next_inode))
     }
 
     pub fn lookup_inode(&self, inode: u64) -> Option<&Entry> {

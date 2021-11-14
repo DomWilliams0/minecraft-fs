@@ -13,8 +13,8 @@ mod structure {
 
     use ipc::generated::CommandArgs;
     use ipc::{generated::CommandType, ReadCommand, ResponseType};
-    use registry::{DirEntry, EntryRef, FileEntry, Registration, RegistrationEntryFn};
-    use std::any::TypeId;
+    use registry::{DirEntry, EntryRef, FileEntry, Registration};
+
     use std::ffi::{OsStr, OsString};
 
     macro_rules! file_entry {
@@ -28,7 +28,7 @@ mod structure {
 
             inventory::submit! { Registration {
                 name: $name,
-                entry_fn: RegistrationEntryFn::Static($ty::entry),
+                entry_fn: $ty::entry,
             }}
         };
     }
@@ -43,7 +43,7 @@ mod structure {
 
             inventory::submit! { Registration {
                 name: $name,
-                entry_fn: RegistrationEntryFn::Static($ty::entry),
+                entry_fn: $ty::entry,
             }}
         };
     }
@@ -154,13 +154,7 @@ mod structure {
             children_out.push(FilesystemEntry::new(
                 OsStr::new("type"),
                 Entry::file(EntityType(self.0)),
-            ))
-        }
-    }
-    inventory::submit! {Registration {
-        name: "entity",
-        entry_fn: RegistrationEntryFn::Dynamic(TypeId::of::<EntityDir>),
-    }}
+            ));
 
     struct EntityType(i32);
     impl FileEntry for EntityType {
@@ -175,8 +169,7 @@ mod structure {
         }
     }
 
-    inventory::submit! {Registration {
-        name: "type",
-        entry_fn: RegistrationEntryFn::Dynamic(TypeId::of::<EntityType>),
-    }}
+    entity_file_entry!(EntityType, CommandType::EntityType, ResponseType::String);
+
+    entity_file_entry!(EntityHealth, CommandType::EntityHealth, ResponseType::Float);
 }
