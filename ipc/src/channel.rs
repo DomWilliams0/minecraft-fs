@@ -212,7 +212,10 @@ impl IpcChannel {
 
         loop {
             match self.sock.write_all(data) {
-                Ok(_) => return Ok(()),
+                Ok(_) => {
+                    self.retries = RETRIES;
+                    return Ok(());
+                }
                 Err(err) if !rebootable(err.kind()) || self.retries == 0 => {
                     return Err(IpcError::Sending(err))
                 }
