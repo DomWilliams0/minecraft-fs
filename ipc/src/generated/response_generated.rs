@@ -552,20 +552,32 @@ pub mod mcfs {
         #[allow(unused_mut)]
         pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
             _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
-            args: &'args StateResponseArgs,
+            args: &'args StateResponseArgs<'args>,
         ) -> flatbuffers::WIPOffset<StateResponse<'bldr>> {
             let mut builder = StateResponseBuilder::new(_fbb);
+            if let Some(x) = args.entity_ids {
+                builder.add_entity_ids(x);
+            }
             builder.add_is_in_game(args.is_in_game);
             builder.finish()
         }
 
         pub const VT_IS_IN_GAME: flatbuffers::VOffsetT = 4;
+        pub const VT_ENTITY_IDS: flatbuffers::VOffsetT = 6;
 
         #[inline]
         pub fn is_in_game(&self) -> bool {
             self._tab
                 .get::<bool>(StateResponse::VT_IS_IN_GAME, Some(false))
                 .unwrap()
+        }
+        #[inline]
+        pub fn entity_ids(&self) -> Option<flatbuffers::Vector<'a, i32>> {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, i32>>>(
+                    StateResponse::VT_ENTITY_IDS,
+                    None,
+                )
         }
     }
 
@@ -578,17 +590,26 @@ pub mod mcfs {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
                 .visit_field::<bool>(&"is_in_game", Self::VT_IS_IN_GAME, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, i32>>>(
+                    &"entity_ids",
+                    Self::VT_ENTITY_IDS,
+                    false,
+                )?
                 .finish();
             Ok(())
         }
     }
-    pub struct StateResponseArgs {
+    pub struct StateResponseArgs<'a> {
         pub is_in_game: bool,
+        pub entity_ids: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, i32>>>,
     }
-    impl<'a> Default for StateResponseArgs {
+    impl<'a> Default for StateResponseArgs<'a> {
         #[inline]
         fn default() -> Self {
-            StateResponseArgs { is_in_game: false }
+            StateResponseArgs {
+                is_in_game: false,
+                entity_ids: None,
+            }
         }
     }
     pub struct StateResponseBuilder<'a: 'b, 'b> {
@@ -600,6 +621,16 @@ pub mod mcfs {
         pub fn add_is_in_game(&mut self, is_in_game: bool) {
             self.fbb_
                 .push_slot::<bool>(StateResponse::VT_IS_IN_GAME, is_in_game, false);
+        }
+        #[inline]
+        pub fn add_entity_ids(
+            &mut self,
+            entity_ids: flatbuffers::WIPOffset<flatbuffers::Vector<'b, i32>>,
+        ) {
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
+                StateResponse::VT_ENTITY_IDS,
+                entity_ids,
+            );
         }
         #[inline]
         pub fn new(
@@ -622,6 +653,7 @@ pub mod mcfs {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let mut ds = f.debug_struct("StateResponse");
             ds.field("is_in_game", &self.is_in_game());
+            ds.field("entity_ids", &self.entity_ids());
             ds.finish()
         }
     }

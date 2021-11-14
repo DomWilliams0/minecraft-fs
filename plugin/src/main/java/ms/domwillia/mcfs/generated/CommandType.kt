@@ -9,7 +9,8 @@ class CommandType private constructor() {
         const val PlayerHealth: Int = 0
         const val PlayerName: Int = 1
         const val PlayerPosition: Int = 2
-        val names : Array<String> = arrayOf("PlayerHealth", "PlayerName", "PlayerPosition")
+        const val EntityType: Int = 3
+        val names : Array<String> = arrayOf("PlayerHealth", "PlayerName", "PlayerPosition", "EntityType")
         fun name(e: Int) : String = names[e]
     }
 }

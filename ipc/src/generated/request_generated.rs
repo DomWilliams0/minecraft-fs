@@ -24,16 +24,17 @@ pub mod mcfs {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_COMMAND_TYPE: i32 = 2;
+    pub const ENUM_MAX_COMMAND_TYPE: i32 = 3;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 3] = [
+    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 4] = [
         CommandType::PlayerHealth,
         CommandType::PlayerName,
         CommandType::PlayerPosition,
+        CommandType::EntityType,
     ];
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -44,17 +45,23 @@ pub mod mcfs {
         pub const PlayerHealth: Self = Self(0);
         pub const PlayerName: Self = Self(1);
         pub const PlayerPosition: Self = Self(2);
+        pub const EntityType: Self = Self(3);
 
         pub const ENUM_MIN: i32 = 0;
-        pub const ENUM_MAX: i32 = 2;
-        pub const ENUM_VALUES: &'static [Self] =
-            &[Self::PlayerHealth, Self::PlayerName, Self::PlayerPosition];
+        pub const ENUM_MAX: i32 = 3;
+        pub const ENUM_VALUES: &'static [Self] = &[
+            Self::PlayerHealth,
+            Self::PlayerName,
+            Self::PlayerPosition,
+            Self::EntityType,
+        ];
         /// Returns the variant's name or "" if unknown.
         pub fn variant_name(self) -> Option<&'static str> {
             match self {
                 Self::PlayerHealth => Some("PlayerHealth"),
                 Self::PlayerName => Some("PlayerName"),
                 Self::PlayerPosition => Some("PlayerPosition"),
+                Self::EntityType => Some("EntityType"),
                 _ => None,
             }
         }
@@ -240,17 +247,25 @@ pub mod mcfs {
             args: &'args CommandArgs,
         ) -> flatbuffers::WIPOffset<Command<'bldr>> {
             let mut builder = CommandBuilder::new(_fbb);
+            if let Some(x) = args.target_entity {
+                builder.add_target_entity(x);
+            }
             builder.add_cmd(args.cmd);
             builder.finish()
         }
 
         pub const VT_CMD: flatbuffers::VOffsetT = 4;
+        pub const VT_TARGET_ENTITY: flatbuffers::VOffsetT = 6;
 
         #[inline]
         pub fn cmd(&self) -> CommandType {
             self._tab
                 .get::<CommandType>(Command::VT_CMD, Some(CommandType::PlayerHealth))
                 .unwrap()
+        }
+        #[inline]
+        pub fn target_entity(&self) -> Option<i32> {
+            self._tab.get::<i32>(Command::VT_TARGET_ENTITY, None)
         }
     }
 
@@ -263,18 +278,21 @@ pub mod mcfs {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
                 .visit_field::<CommandType>(&"cmd", Self::VT_CMD, false)?
+                .visit_field::<i32>(&"target_entity", Self::VT_TARGET_ENTITY, false)?
                 .finish();
             Ok(())
         }
     }
     pub struct CommandArgs {
         pub cmd: CommandType,
+        pub target_entity: Option<i32>,
     }
     impl<'a> Default for CommandArgs {
         #[inline]
         fn default() -> Self {
             CommandArgs {
                 cmd: CommandType::PlayerHealth,
+                target_entity: None,
             }
         }
     }
@@ -287,6 +305,11 @@ pub mod mcfs {
         pub fn add_cmd(&mut self, cmd: CommandType) {
             self.fbb_
                 .push_slot::<CommandType>(Command::VT_CMD, cmd, CommandType::PlayerHealth);
+        }
+        #[inline]
+        pub fn add_target_entity(&mut self, target_entity: i32) {
+            self.fbb_
+                .push_slot_always::<i32>(Command::VT_TARGET_ENTITY, target_entity);
         }
         #[inline]
         pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> CommandBuilder<'a, 'b> {
@@ -307,6 +330,7 @@ pub mod mcfs {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let mut ds = f.debug_struct("Command");
             ds.field("cmd", &self.cmd());
+            ds.field("target_entity", &self.target_entity());
             ds.finish()
         }
     }
@@ -338,16 +362,16 @@ pub mod mcfs {
             args: &'args StateRequestArgs,
         ) -> flatbuffers::WIPOffset<StateRequest<'bldr>> {
             let mut builder = StateRequestBuilder::new(_fbb);
-            builder.add_entity_list(args.entity_list);
+            builder.add_entities_by_id(args.entities_by_id);
             builder.finish()
         }
 
-        pub const VT_ENTITY_LIST: flatbuffers::VOffsetT = 4;
+        pub const VT_ENTITIES_BY_ID: flatbuffers::VOffsetT = 4;
 
         #[inline]
-        pub fn entity_list(&self) -> bool {
+        pub fn entities_by_id(&self) -> bool {
             self._tab
-                .get::<bool>(StateRequest::VT_ENTITY_LIST, Some(false))
+                .get::<bool>(StateRequest::VT_ENTITIES_BY_ID, Some(false))
                 .unwrap()
         }
     }
@@ -360,18 +384,20 @@ pub mod mcfs {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
-                .visit_field::<bool>(&"entity_list", Self::VT_ENTITY_LIST, false)?
+                .visit_field::<bool>(&"entities_by_id", Self::VT_ENTITIES_BY_ID, false)?
                 .finish();
             Ok(())
         }
     }
     pub struct StateRequestArgs {
-        pub entity_list: bool,
+        pub entities_by_id: bool,
     }
     impl<'a> Default for StateRequestArgs {
         #[inline]
         fn default() -> Self {
-            StateRequestArgs { entity_list: false }
+            StateRequestArgs {
+                entities_by_id: false,
+            }
         }
     }
     pub struct StateRequestBuilder<'a: 'b, 'b> {
@@ -380,9 +406,9 @@ pub mod mcfs {
     }
     impl<'a: 'b, 'b> StateRequestBuilder<'a, 'b> {
         #[inline]
-        pub fn add_entity_list(&mut self, entity_list: bool) {
+        pub fn add_entities_by_id(&mut self, entities_by_id: bool) {
             self.fbb_
-                .push_slot::<bool>(StateRequest::VT_ENTITY_LIST, entity_list, false);
+                .push_slot::<bool>(StateRequest::VT_ENTITIES_BY_ID, entities_by_id, false);
         }
         #[inline]
         pub fn new(
@@ -404,7 +430,7 @@ pub mod mcfs {
     impl std::fmt::Debug for StateRequest<'_> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let mut ds = f.debug_struct("StateRequest");
-            ds.field("entity_list", &self.entity_list());
+            ds.field("entities_by_id", &self.entities_by_id());
             ds.finish()
         }
     }

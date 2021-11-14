@@ -75,7 +75,12 @@ struct StructureBuilder {
 
 pub struct Registration {
     pub name: &'static str,
-    pub entry_fn: fn() -> Entry,
+    pub entry_fn: RegistrationEntryFn,
+}
+
+pub enum RegistrationEntryFn {
+    Static(fn() -> Entry),
+    Dynamic(fn() -> TypeId),
 }
 
 inventory::collect!(Registration);
@@ -94,23 +99,25 @@ pub enum DynamicChildrenCreation {
 }
 
 impl StructureBuilder {
-    fn register(&mut self, inode: u64, name: &'static str, instance: Entry) {
+    fn register(&mut self, inode: u64, name: &'static str, instance: Option<Entry>, ty: TypeId) {
         log::debug!("registering inode={}, name={:?}", inode, name);
-        let ty = instance.entry_typeid();
-        assert!(
-            self.registry
-                .insert(
-                    inode,
-                    FilesystemEntry {
-                        name: Cow::Borrowed(name.as_ref()),
-                        entry: instance,
-                    },
-                )
-                .is_none(),
-            "duplicate entry for inode {} ({:?})",
-            inode,
-            name
-        );
+
+        if let Some(instance) = instance {
+            assert!(
+                self.registry
+                    .insert(
+                        inode,
+                        FilesystemEntry {
+                            name: Cow::Borrowed(name.as_ref()),
+                            entry: instance,
+                        },
+                    )
+                    .is_none(),
+                "duplicate entry for inode {} ({:?})",
+                inode,
+                name
+            );
+        }
 
         assert!(
             self.ty_registry.insert(ty, inode).is_none(),
@@ -201,7 +208,16 @@ impl FilesystemStructure {
                 inode += 1;
                 curr
             };
-            builder.register(my_inode, reg.name, (reg.entry_fn)());
+
+            let (instance, ty) = match reg.entry_fn {
+                RegistrationEntryFn::Static(f) => {
+                    let entry = (f)();
+                    let ty = entry.entry_typeid();
+                    (Some(entry), ty)
+                }
+                RegistrationEntryFn::Dynamic(t) => (None, (t)()),
+            };
+            builder.register(my_inode, reg.name, instance, ty);
         }
 
         let root = builder.registry.get(&1).expect("missing root dir");
@@ -428,8 +444,11 @@ impl FilesystemEntry {
         }
     }
 
-    pub fn new(name: Cow<'static, OsStr>, entry: Entry) -> Self {
-        Self { name, entry }
+    pub fn new(name: impl Into<Cow<'static, OsStr>>, entry: Entry) -> Self {
+        Self {
+            name: name.into(),
+            entry,
+        }
     }
 }
 

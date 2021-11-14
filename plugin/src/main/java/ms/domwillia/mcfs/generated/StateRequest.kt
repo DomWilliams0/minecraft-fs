@@ -17,7 +17,7 @@ class StateRequest : Table() {
         __init(_i, _bb)
         return this
     }
-    val entityList : Boolean
+    val entitiesById : Boolean
         get() {
             val o = __offset(4)
             return if(o != 0) 0.toByte() != bb.get(o + bb_pos) else false
@@ -29,13 +29,13 @@ class StateRequest : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createStateRequest(builder: FlatBufferBuilder, entityList: Boolean) : Int {
+        fun createStateRequest(builder: FlatBufferBuilder, entitiesById: Boolean) : Int {
             builder.startTable(1)
-            addEntityList(builder, entityList)
+            addEntitiesById(builder, entitiesById)
             return endStateRequest(builder)
         }
         fun startStateRequest(builder: FlatBufferBuilder) = builder.startTable(1)
-        fun addEntityList(builder: FlatBufferBuilder, entityList: Boolean) = builder.addBoolean(0, entityList, false)
+        fun addEntitiesById(builder: FlatBufferBuilder, entitiesById: Boolean) = builder.addBoolean(0, entitiesById, false)
         fun endStateRequest(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

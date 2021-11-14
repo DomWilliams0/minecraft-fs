@@ -5,6 +5,7 @@ import com.google.flatbuffers.FlatBufferBuilder
 import ms.domwillia.mcfs.MinecraftFsMod
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.network.ClientPlayerEntity
+import net.minecraft.util.math.Box
 import net.minecraft.util.math.Vec3d
 import java.nio.ByteBuffer
 
@@ -60,8 +61,26 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
     private fun executeStateRequest(req: StateRequest): Int {
         MinecraftFsMod.LOGGER.info("Executing state request")
 
-        val isInGame = MinecraftClient.getInstance().player != null;
-        return StateResponse.createStateResponse(responseBuilder, isInGame = isInGame)
+
+        val player = MinecraftClient.getInstance().player
+        val isInGame = player != null
+
+        val entityIds = if (player != null && req.entitiesById) {
+            val bounds = -10_000.0;
+            val box = Box(Vec3d(-bounds, -bounds, -bounds), Vec3d(bounds, bounds, bounds))
+            val entities = player.world.getOtherEntities(null, box);
+
+            StateResponse.createEntityIdsVector(responseBuilder, entities.map { e -> e.id }.toIntArray())
+        } else {
+            null
+        }
+
+        StateResponse.startStateResponse(responseBuilder);
+        StateResponse.addIsInGame(responseBuilder, isInGame);
+        if (entityIds != null) {
+            StateResponse.addEntityIds(responseBuilder, entityIds)
+        }
+        return StateResponse.endStateResponse(responseBuilder);
     }
 
     private val thePlayer: ClientPlayerEntity

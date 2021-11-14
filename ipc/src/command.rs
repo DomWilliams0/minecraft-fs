@@ -1,4 +1,4 @@
-use crate::generated::CommandType;
+use crate::generated::{CommandArgs, CommandType};
 use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Copy, Clone)]
@@ -10,7 +10,8 @@ pub enum ResponseType {
 }
 
 pub enum ReadCommand {
-    WithResponse(CommandType, ResponseType),
+    Stateless(CommandType, ResponseType),
+    Stateful(CommandArgs, ResponseType),
     // TODO WithoutResponse?
 }
 

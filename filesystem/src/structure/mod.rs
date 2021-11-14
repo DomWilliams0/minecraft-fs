@@ -8,12 +8,14 @@ mod structure {
     #![allow(clippy::module_inception)]
 
     use super::*;
-    use crate::state::GameState;
+    use crate::state::{GameState, GameStateInterest};
     use crate::structure::registry::FilesystemEntry;
 
+    use ipc::generated::CommandArgs;
     use ipc::{generated::CommandType, ReadCommand, ResponseType};
-    use registry::{DirEntry, EntryRef, FileEntry, Registration};
-    use std::ffi::OsString;
+    use registry::{DirEntry, EntryRef, FileEntry, Registration, RegistrationEntryFn};
+    use std::any::{Any, TypeId};
+    use std::ffi::{OsStr, OsString};
 
     macro_rules! file_entry {
         ($ty:ident, $name:expr) => {
@@ -26,7 +28,7 @@ mod structure {
 
             inventory::submit! { Registration {
                 name: $name,
-                entry_fn: $ty::entry,
+                entry_fn: RegistrationEntryFn::Static($ty::entry),
             }}
         };
     }
@@ -41,7 +43,7 @@ mod structure {
 
             inventory::submit! { Registration {
                 name: $name,
-                entry_fn: $ty::entry,
+                entry_fn: RegistrationEntryFn::Static($ty::entry),
             }}
         };
     }
@@ -72,7 +74,7 @@ mod structure {
     file_entry!(PlayerHealth, "health");
     impl FileEntry for PlayerHealth {
         fn read(&self) -> Option<ReadCommand> {
-            Some(ReadCommand::WithResponse(
+            Some(ReadCommand::Stateless(
                 CommandType::PlayerHealth,
                 ResponseType::Float,
             ))
@@ -86,7 +88,7 @@ mod structure {
     file_entry!(PlayerName, "name");
     impl FileEntry for PlayerName {
         fn read(&self) -> Option<ReadCommand> {
-            Some(ReadCommand::WithResponse(
+            Some(ReadCommand::Stateless(
                 CommandType::PlayerName,
                 ResponseType::String,
             ))
@@ -96,7 +98,7 @@ mod structure {
     file_entry!(PlayerPosition, "position");
     impl FileEntry for PlayerPosition {
         fn read(&self) -> Option<ReadCommand> {
-            Some(ReadCommand::WithResponse(
+            Some(ReadCommand::Stateless(
                 CommandType::PlayerPosition,
                 ResponseType::Position,
             ))
@@ -113,38 +115,68 @@ mod structure {
     dir_entry!(EntitiesDir, "entities");
     impl DirEntry for EntitiesDir {
         fn children(&self) -> &'static [EntryRef] {
-            &[EntryRef::Dir(&EntitiesByTypeDir)]
+            &[EntryRef::Dir(&EntitiesByIdDir)]
+        }
+
+        fn filter(&self, state: &GameState) -> EntryFilterResult {
+            if !state.is_in_game {
+                EntryFilterResult::Exclude
+            } else {
+                EntryFilterResult::IncludeAllChildren
+            }
         }
     }
 
-    dir_entry!(EntitiesByTypeDir, "by-type");
-    impl DirEntry for EntitiesByTypeDir {
+    dir_entry!(EntitiesByIdDir, "by-id");
+    impl DirEntry for EntitiesByIdDir {
         fn children(&self) -> &'static [EntryRef] {
             &[]
         }
 
         fn dynamic_children(&self, children_out: &mut Vec<FilesystemEntry>, state: &GameState) {
-            children_out.extend((1..4).map(|i| {
-                FilesystemEntry::new(
-                    OsString::from(format!("dynamic-boi-{}", i)).into(),
-                    Entry::dir(DynamicTest(i)),
-                )
+            children_out.extend(state.entity_ids.iter().map(|i| {
+                FilesystemEntry::new(OsString::from(i.to_string()), Entry::dir(EntityDir(*i)))
             }));
         }
+
+        fn register_interest(&self, interest: &mut GameStateInterest) {
+            interest.entities_by_id = true;
+        }
     }
 
-    struct DynamicTest(u32);
-
-    impl DirEntry for DynamicTest {
+    struct EntityDir(i32);
+    impl DirEntry for EntityDir {
         fn children(&self) -> &'static [EntryRef] {
-            &[EntryRef::File(&MyThing)]
+            &[]
+        }
+
+        fn dynamic_children(&self, children_out: &mut Vec<FilesystemEntry>, _state: &GameState) {
+            children_out.push(FilesystemEntry::new(
+                OsStr::new("type"),
+                Entry::file(EntityType(self.0)),
+            ))
+        }
+    }
+    inventory::submit! {Registration {
+        name: "entity",
+        entry_fn: RegistrationEntryFn::Dynamic(TypeId::of::<EntityDir>),
+    }}
+
+    struct EntityType(i32);
+    impl FileEntry for EntityType {
+        fn read(&self) -> Option<ReadCommand> {
+            Some(ReadCommand::Stateful(
+                CommandArgs {
+                    cmd: CommandType::EntityType,
+                    target_entity: Some(self.0),
+                },
+                ResponseType::String,
+            ))
         }
     }
 
-    file_entry!(MyThing, "cool");
-    impl FileEntry for MyThing {
-        fn read(&self) -> Option<ReadCommand> {
-            None
-        }
-    }
+    inventory::submit! {Registration {
+        name: "type",
+        entry_fn: RegistrationEntryFn::Dynamic(TypeId::of::<EntityType>),
+    }}
 }

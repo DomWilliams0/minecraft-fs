@@ -4,14 +4,18 @@ enum CommandType:int32 {
 	PlayerHealth,
 	PlayerName,
 	PlayerPosition,
+	EntityType,
 }
 
 table Command {
     cmd: CommandType;
+    target_entity:int32 = null;
 }
 
+// ---------------
+
 table StateRequest {
-    entity_list:bool;
+    entities_by_id: bool = false;
 }
 
 union GameRequestBody {Command, StateRequest}

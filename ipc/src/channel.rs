@@ -72,10 +72,17 @@ impl IpcChannel {
 
     pub fn send_read_command(&mut self, cmd: ReadCommand) -> Result<ResponseBody, IpcError> {
         let (cmd, resp) = match cmd {
-            ReadCommand::WithResponse(cmd, resp) => (cmd, Some(resp)),
+            ReadCommand::Stateless(cmd, resp) => (
+                CommandArgs {
+                    cmd,
+                    ..Default::default()
+                },
+                resp,
+            ),
+            ReadCommand::Stateful(cmd, resp) => (cmd, resp),
         };
 
-        self.send_command(cmd, resp)
+        self.send_command(&cmd, Some(resp))
     }
 
     pub fn send_state_request(
@@ -108,12 +115,12 @@ impl IpcChannel {
 
     fn send_command(
         &mut self,
-        command: CommandType,
+        command: &CommandArgs,
         response_type: Option<ResponseType>,
     ) -> Result<ResponseBody, IpcError> {
         // TODO reuse buffer allocation
         let mut buf = FlatBufferBuilder::with_capacity(1024);
-        let cmd = Command::create(&mut buf, &CommandArgs { cmd: command });
+        let cmd = Command::create(&mut buf, command);
         let req = GameRequest::create(
             &mut buf,
             &GameRequestArgs {

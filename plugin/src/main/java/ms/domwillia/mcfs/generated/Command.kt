@@ -22,6 +22,11 @@ class Command : Table() {
             val o = __offset(4)
             return if(o != 0) bb.getInt(o + bb_pos) else 0
         }
+    val targetEntity : Int?
+        get() {
+            val o = __offset(6)
+            return if(o != 0) bb.getInt(o + bb_pos) else null
+        }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_2_0_0()
         fun getRootAsCommand(_bb: ByteBuffer): Command = getRootAsCommand(_bb, Command())
@@ -29,13 +34,15 @@ class Command : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createCommand(builder: FlatBufferBuilder, cmd: Int) : Int {
-            builder.startTable(1)
+        fun createCommand(builder: FlatBufferBuilder, cmd: Int, targetEntity: Int?) : Int {
+            builder.startTable(2)
+            targetEntity?.run { addTargetEntity(builder, targetEntity) }
             addCmd(builder, cmd)
             return endCommand(builder)
         }
-        fun startCommand(builder: FlatBufferBuilder) = builder.startTable(1)
+        fun startCommand(builder: FlatBufferBuilder) = builder.startTable(2)
         fun addCmd(builder: FlatBufferBuilder, cmd: Int) = builder.addInt(0, cmd, 0)
+        fun addTargetEntity(builder: FlatBufferBuilder, targetEntity: Int) = builder.addInt(1, targetEntity, 0)
         fun endCommand(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

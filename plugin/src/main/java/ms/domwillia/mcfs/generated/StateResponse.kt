@@ -22,6 +22,20 @@ class StateResponse : Table() {
             val o = __offset(4)
             return if(o != 0) 0.toByte() != bb.get(o + bb_pos) else false
         }
+    fun entityIds(j: Int) : Int {
+        val o = __offset(6)
+        return if (o != 0) {
+            bb.getInt(__vector(o) + j * 4)
+        } else {
+            0
+        }
+    }
+    val entityIdsLength : Int
+        get() {
+            val o = __offset(6); return if (o != 0) __vector_len(o) else 0
+        }
+    val entityIdsAsByteBuffer : ByteBuffer get() = __vector_as_bytebuffer(6, 4)
+    fun entityIdsInByteBuffer(_bb: ByteBuffer) : ByteBuffer = __vector_in_bytebuffer(_bb, 6, 4)
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_2_0_0()
         fun getRootAsStateResponse(_bb: ByteBuffer): StateResponse = getRootAsStateResponse(_bb, StateResponse())
@@ -29,13 +43,23 @@ class StateResponse : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createStateResponse(builder: FlatBufferBuilder, isInGame: Boolean) : Int {
-            builder.startTable(1)
+        fun createStateResponse(builder: FlatBufferBuilder, isInGame: Boolean, entityIdsOffset: Int) : Int {
+            builder.startTable(2)
+            addEntityIds(builder, entityIdsOffset)
             addIsInGame(builder, isInGame)
             return endStateResponse(builder)
         }
-        fun startStateResponse(builder: FlatBufferBuilder) = builder.startTable(1)
+        fun startStateResponse(builder: FlatBufferBuilder) = builder.startTable(2)
         fun addIsInGame(builder: FlatBufferBuilder, isInGame: Boolean) = builder.addBoolean(0, isInGame, false)
+        fun addEntityIds(builder: FlatBufferBuilder, entityIds: Int) = builder.addOffset(1, entityIds, 0)
+        fun createEntityIdsVector(builder: FlatBufferBuilder, data: IntArray) : Int {
+            builder.startVector(4, data.size, 4)
+            for (i in data.size - 1 downTo 0) {
+                builder.addInt(data[i])
+            }
+            return builder.endVector()
+        }
+        fun startEntityIdsVector(builder: FlatBufferBuilder, numElems: Int) = builder.startVector(4, numElems, 4)
         fun endStateResponse(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

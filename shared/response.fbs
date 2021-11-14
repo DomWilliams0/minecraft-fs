@@ -23,6 +23,7 @@ table Response {
 
 table StateResponse {
     is_in_game:bool;
+    entity_ids:[int32];
 }
 
 union GameResponseBody {Response, StateResponse}

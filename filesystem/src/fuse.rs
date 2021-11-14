@@ -1,11 +1,16 @@
 use crate::state::{CachedGameState, GameStateInterest};
 use crate::structure::{Entry, EntryFilterResult, EntryRef, FilesystemStructure, InodePool};
-use fuser::{FileAttr, FileType, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
+use fuser::{
+    FileAttr, FileType, KernelConfig, ReplyAttr, ReplyBmap, ReplyCreate, ReplyData, ReplyDirectory,
+    ReplyDirectoryPlus, ReplyEmpty, ReplyEntry, ReplyIoctl, ReplyLock, ReplyLseek, ReplyOpen,
+    ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
+};
 use ipc::{IpcChannel, IpcError};
 use log::*;
 
 use std::ffi::OsStr;
 use std::fmt::Write;
+use std::path::Path;
 
 use std::time::{Duration, SystemTime};
 
