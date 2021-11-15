@@ -1,13 +1,9 @@
 use std::io::{ErrorKind, Read, Write};
 
 use crate::command::{Body, BodyType, CommandState};
-use crate::generated::{
-    root_as_game_response, CommandArgs, CommandType, Error, GameRequest, GameRequestArgs,
-    GameRequestBody, GameResponseBody, StateRequest, StateRequestArgs, StateResponse, Vec3,
-    WriteBody, WriteBodyArgs,
-};
+use crate::generated::{CommandArgs, CommandType, Error, GameRequest, GameRequestArgs, GameRequestBody, GameResponse, GameResponseBody, StateRequest, StateRequestArgs, StateResponse, Vec3, WriteBody, WriteBodyArgs};
 use crate::Command;
-use flatbuffers::{FlatBufferBuilder, InvalidFlatbuffer};
+use flatbuffers::{FlatBufferBuilder, InvalidFlatbuffer, root};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -111,7 +107,7 @@ impl IpcChannel {
 
         let response = self
             .recv_raw_response()
-            .and_then(|resp| root_as_game_response(resp).map_err(IpcError::Deserialization))?;
+            .and_then(|resp| root::<GameResponse>(resp).map_err(IpcError::Deserialization))?;
 
         response
             .body_as_state_response()
@@ -180,7 +176,7 @@ impl IpcChannel {
 
         let response = self
             .recv_raw_response()
-            .and_then(|resp| root_as_game_response(resp).map_err(IpcError::Deserialization))?;
+            .and_then(|resp| root::<GameResponse>(resp).map_err(IpcError::Deserialization))?;
 
         let response = match response.body_as_response() {
             Some(resp) => resp,

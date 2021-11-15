@@ -46,7 +46,5 @@ class GameRequest : Table() {
                 builder.required(o, 6)
             return o
         }
-        fun finishGameRequestBuffer(builder: FlatBufferBuilder, offset: Int) = builder.finish(offset)
-        fun finishSizePrefixedGameRequestBuffer(builder: FlatBufferBuilder, offset: Int) = builder.finishSizePrefixed(offset)
     }
 }
