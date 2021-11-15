@@ -1,11 +1,12 @@
 use std::io::{ErrorKind, Read, Write};
 
-use crate::command::{ResponseBody, ResponseType};
+use crate::command::{Body, BodyType, CommandState};
 use crate::generated::{
-    root_as_game_response, Command, CommandArgs, Error, GameRequest, GameRequestArgs,
-    GameRequestBody, GameResponseBody, StateRequest, StateRequestArgs, StateResponse,
+    root_as_game_response, CommandArgs, CommandType, Error, GameRequest, GameRequestArgs,
+    GameRequestBody, GameResponseBody, StateRequest, StateRequestArgs, StateResponse, Vec3,
+    WriteBody, WriteBodyArgs,
 };
-use crate::ReadCommand;
+use crate::Command;
 use flatbuffers::{FlatBufferBuilder, InvalidFlatbuffer};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
@@ -44,10 +45,13 @@ pub enum IpcError {
     UnexpectedGameResponse(GameResponseBody),
 
     #[error("Expected response type {0:?} but got something else")]
-    UnexpectedResponse(ResponseType),
+    UnexpectedResponse(BodyType),
 
     #[error("Deserialization failed: {0}")]
     Deserialization(#[from] InvalidFlatbuffer),
+
+    #[error("Write data cannot be serialized into {0:?}")]
+    BadData(BodyType),
 }
 
 impl IpcChannel {
@@ -70,19 +74,20 @@ impl IpcChannel {
         })
     }
 
-    pub fn send_read_command(&mut self, cmd: ReadCommand) -> Result<ResponseBody, IpcError> {
-        let (cmd, resp) = match cmd {
-            ReadCommand::Stateless(cmd, resp) => (
-                CommandArgs {
-                    cmd,
-                    ..Default::default()
-                },
-                resp,
-            ),
-            ReadCommand::Stateful(cmd, resp) => (cmd, resp),
-        };
+    pub fn send_read_command(&mut self, cmd: Command) -> Result<Body, IpcError> {
+        self.send_raw_command(cmd.ty, Some(cmd.body), None, cmd.state)
+            .map(|opt| opt.expect("response expected"))
+    }
 
-        self.send_command(&cmd, Some(resp))
+    pub fn send_write_command(&mut self, cmd: Command, data: &[u8]) -> Result<usize, IpcError> {
+        log::trace!("write data {:?}", data);
+        let write = cmd
+            .body
+            .create_from_data(data)
+            .ok_or(IpcError::BadData(cmd.body))?;
+
+        self.send_raw_command(cmd.ty, None, Some(write), cmd.state)?;
+        Ok(data.len())
     }
 
     pub fn send_state_request(
@@ -113,14 +118,50 @@ impl IpcChannel {
             .ok_or_else(|| IpcError::UnexpectedGameResponse(response.body_type()))
     }
 
-    fn send_command(
+    fn send_raw_command(
         &mut self,
-        command: &CommandArgs,
-        response_type: Option<ResponseType>,
-    ) -> Result<ResponseBody, IpcError> {
+        cmd: CommandType,
+        response_type: Option<BodyType>,
+        write: Option<Body>,
+        state: CommandState,
+    ) -> Result<Option<Body>, IpcError> {
+        use crate::generated::Command;
+
         // TODO reuse buffer allocation
         let mut buf = FlatBufferBuilder::with_capacity(1024);
-        let cmd = Command::create(&mut buf, command);
+        let cmd = {
+            let write_body = write.map(|body| {
+                let mut float = None;
+                let mut int = None;
+                let mut string = None;
+                let mut pos = None;
+                match body {
+                    Body::Integer(val) => int = Some(val),
+                    Body::Float(val) => float = Some(val),
+                    Body::String(val) => string = Some(buf.create_string(&val)),
+                    Body::Position { x, y, z } => pos = Some(Vec3::new(x, y, z)),
+                }
+                WriteBody::create(
+                    &mut buf,
+                    &WriteBodyArgs {
+                        float,
+                        int,
+                        string,
+                        pos: pos.as_ref(),
+                    },
+                )
+            });
+
+            Command::create(
+                &mut buf,
+                &CommandArgs {
+                    cmd,
+                    target_entity: state.target_entity,
+                    write: write_body,
+                },
+            )
+        };
+
         let req = GameRequest::create(
             &mut buf,
             &GameRequestArgs {
@@ -134,7 +175,7 @@ impl IpcChannel {
 
         let resp_type = match response_type {
             Some(ty) => ty,
-            None => return Ok(ResponseBody::None),
+            None => return Ok(None),
         };
 
         let response = self
@@ -152,24 +193,26 @@ impl IpcChannel {
                 _ => IpcError::ClientError(err.variant_name().unwrap()),
             })
         } else {
-            use ResponseType::*;
-            match (
-                resp_type,
-                response.float(),
-                response.int(),
-                response.string(),
-                response.pos(),
-            ) {
-                (Float, Some(val), None, None, None) => Ok(ResponseBody::Float(val)),
-                (Integer, None, Some(val), None, None) => Ok(ResponseBody::Integer(val)),
-                (String, None, None, Some(val), None) => Ok(ResponseBody::String(val)),
-                (Position, None, None, None, Some(val)) => Ok(ResponseBody::Position {
-                    x: val.x(),
-                    y: val.y(),
-                    z: val.z(),
-                }),
-                _ => Err(IpcError::UnexpectedResponse(resp_type)),
-            }
+            use BodyType::*;
+            return Ok(Some(
+                match (
+                    resp_type,
+                    response.float(),
+                    response.int(),
+                    response.string(),
+                    response.pos(),
+                ) {
+                    (Float, Some(val), None, None, None) => Body::Float(val),
+                    (Integer, None, Some(val), None, None) => Body::Integer(val),
+                    (String, None, None, Some(val), None) => Body::String(val.into()),
+                    (Position, None, None, None, Some(val)) => Body::Position {
+                        x: val.x(),
+                        y: val.y(),
+                        z: val.z(),
+                    },
+                    _ => return Err(IpcError::UnexpectedResponse(resp_type)),
+                },
+            ));
         }
     }
 

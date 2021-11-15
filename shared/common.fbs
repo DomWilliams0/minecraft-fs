@@ -1,0 +1,6 @@
+
+struct Vec3 {
+    x:double;
+    y:double;
+    z:double;
+}

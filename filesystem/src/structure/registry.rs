@@ -1,7 +1,7 @@
 use crate::state::{GameState, GameStateInterest};
 use crate::structure::inode::InodePool;
 use crate::structure::structure::Root;
-use ipc::ReadCommand;
+use ipc::Command;
 use parking_lot::{Mutex, MutexGuard};
 use smallvec::SmallVec;
 use std::any::{Any, TypeId};
@@ -63,7 +63,13 @@ pub trait DirEntry: Send + Sync + Any {
 
 #[allow(unused_variables)]
 pub trait FileEntry: Send + Sync + Any {
-    fn read(&self) -> Option<ReadCommand>;
+    fn read(&self) -> Option<Command> {
+        None
+    }
+
+    fn write(&self) -> Option<Command> {
+        None
+    }
 
     fn should_include(&self, state: &GameState) -> bool {
         true

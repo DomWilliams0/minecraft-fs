@@ -1,18 +1,19 @@
-use crate::state::{CachedGameState, GameStateInterest};
-use crate::structure::{Entry, EntryFilterResult, EntryRef, FilesystemStructure, InodePool};
+use std::ffi::OsStr;
+use std::fmt::Write;
+use std::os::unix::ffi::OsStrExt;
+use std::time::{Duration, SystemTime};
+
 use fuser::{
     FileAttr, FileType, ReplyAttr, ReplyBmap, ReplyCreate, ReplyData, ReplyDirectory,
     ReplyDirectoryPlus, ReplyEmpty, ReplyEntry, ReplyIoctl, ReplyLock, ReplyLseek, ReplyOpen,
     ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
 };
-use ipc::{IpcChannel, IpcError};
 use log::*;
 
-use std::ffi::OsStr;
-use std::fmt::Write;
-use std::os::unix::ffi::OsStrExt;
+use ipc::{IpcChannel, IpcError};
 
-use std::time::{Duration, SystemTime};
+use crate::state::{CachedGameState, GameStateInterest};
+use crate::structure::{Entry, EntryFilterResult, EntryRef, FilesystemStructure, InodePool};
 
 pub struct MinecraftFs {
     uid: u32,
@@ -71,13 +72,43 @@ impl fuser::Filesystem for MinecraftFs {
         let attr = match self.structure.lookup_inode(ino) {
             Some(entry) => self.mk_attr(ino, entry),
 
-            None => {
-                reply.error(libc::ENOENT);
-                return;
-            }
+            None => return reply.error(libc::ENOENT),
         };
 
         reply.attr(&TTL, &attr);
+    }
+
+    fn setattr(
+        &mut self,
+        _req: &Request<'_>,
+        ino: u64,
+        _mode: Option<u32>,
+        _uid: Option<u32>,
+        _gid: Option<u32>,
+        size: Option<u64>,
+        _atime: Option<TimeOrNow>,
+        _mtime: Option<TimeOrNow>,
+        _ctime: Option<SystemTime>,
+        _fh: Option<u64>,
+        _crtime: Option<SystemTime>,
+        _chgtime: Option<SystemTime>,
+        _bkuptime: Option<SystemTime>,
+        _flags: Option<u32>,
+        reply: ReplyAttr,
+    ) {
+        trace!("setattr(inode={})", ino);
+
+        let entry = match self.structure.lookup_inode(ino) {
+            Some(entry) => entry,
+            None => return reply.error(libc::ENOENT),
+        };
+
+        if let (Some(0), Entry::File(_)) = (size, entry) {
+            trace!("truncating file");
+            return reply.attr(&TTL, &self.mk_attr(ino, entry));
+        }
+
+        reply.error(libc::ENOSYS)
     }
 
     fn readlink(&mut self, _req: &Request<'_>, ino: u64, reply: ReplyData) {
@@ -149,6 +180,44 @@ impl fuser::Filesystem for MinecraftFs {
                 reply.data(response_data.as_bytes());
             }
             Err(_) => reply.error(libc::ENOMEM),
+        }
+    }
+
+    fn write(
+        &mut self,
+        _req: &Request<'_>,
+        ino: u64,
+        _fh: u64,
+        offset: i64,
+        data: &[u8],
+        _write_flags: u32,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        reply: ReplyWrite,
+    ) {
+        trace!(
+            "write(inode={}, offset={}, data=<{} bytes>)",
+            ino,
+            offset,
+            data.len()
+        );
+
+        let file = match self.structure.lookup_inode(ino) {
+            Some(Entry::File(f)) => &**f,
+            _ => return reply.error(libc::ENOENT),
+        };
+
+        let cmd = match file.write() {
+            Some(cmd) => cmd,
+            None => return reply.error(libc::EOPNOTSUPP),
+        };
+
+        match self.ipc.send_write_command(cmd, data) {
+            Ok(resp) => reply.written(resp as u32),
+            Err(err) => {
+                error!("write failed: {}", err);
+                reply.error(ipc_error_code(&err));
+            }
         }
     }
 
@@ -245,7 +314,9 @@ fn ipc_error_code(err: &IpcError) -> i32 {
         | IpcError::Sending(_)
         | IpcError::Receiving(_)
         | IpcError::Deserialization(_) => libc::EIO,
-        IpcError::UnexpectedGameResponse(_) | IpcError::UnexpectedResponse(_) => libc::EINVAL,
+        IpcError::UnexpectedGameResponse(_)
+        | IpcError::UnexpectedResponse(_)
+        | IpcError::BadData(_) => libc::EINVAL,
     }
 }
 

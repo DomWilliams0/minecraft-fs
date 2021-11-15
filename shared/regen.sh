@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-flatc --rust --kotlin *.fbs
+flatc --rust --kotlin --include-prefix generated *.fbs
 
 rm -fv ../ipc/src/generated/*_generated.rs
 mv -v *_generated.rs ../ipc/src/generated/

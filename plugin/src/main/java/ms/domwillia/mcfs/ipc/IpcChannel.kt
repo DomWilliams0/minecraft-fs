@@ -1,20 +1,16 @@
 package ms.domwillia.mcfs.ipc
 
-import MCFS.Command
 import MCFS.GameRequest
-import MCFS.GameRequestBody
 import com.google.flatbuffers.FlatBufferBuilder
-import java.lang.Runnable
-import java.io.IOException
 import ms.domwillia.mcfs.MinecraftFsMod
-import java.lang.Exception
-import java.nio.file.Paths
-import java.net.UnixDomainSocketAddress
+import java.io.IOException
 import java.net.StandardProtocolFamily
+import java.net.UnixDomainSocketAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.ServerSocketChannel
 import java.nio.channels.SocketChannel
+import java.nio.file.Paths
 
 class IpcChannel : Runnable {
     private val channel: ServerSocketChannel
@@ -46,14 +42,16 @@ class IpcChannel : Runnable {
                     val request = GameRequest.getRootAsGameRequest(buf);
                     val response = executor.execute(request)
 
-                    val responseSize = response.remaining()
-                    buf.clear();
-                    buf.order(ByteOrder.LITTLE_ENDIAN)
-                    buf.putInt(responseSize)
-                    buf.put(response)
-                    buf.flip()
-                    MinecraftFsMod.LOGGER.info("Writing $responseSize bytes")
-                    client.write(buf)
+                    response?.let {
+                        val responseSize = it.remaining()
+                        buf.clear();
+                        buf.order(ByteOrder.LITTLE_ENDIAN)
+                        buf.putInt(responseSize)
+                        buf.put(it)
+                        buf.flip()
+                        MinecraftFsMod.LOGGER.info("Writing $responseSize bytes")
+                        client.write(buf)
+                    }
                 }
             } catch (e: Exception) {
                 MinecraftFsMod.LOGGER.catching(e)

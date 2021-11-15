@@ -2,6 +2,7 @@
 
 package MCFS
 
+import MCFS.Common.Vec3
 import java.nio.*
 import kotlin.math.sign
 import com.google.flatbuffers.*
@@ -39,8 +40,8 @@ class Response : Table() {
         }
     val stringAsByteBuffer : ByteBuffer get() = __vector_as_bytebuffer(10, 1)
     fun stringInByteBuffer(_bb: ByteBuffer) : ByteBuffer = __vector_in_bytebuffer(_bb, 10, 1)
-    val pos : MCFS.Vec3? get() = pos(MCFS.Vec3())
-    fun pos(obj: MCFS.Vec3) : MCFS.Vec3? {
+    val pos : Vec3? get() = pos(Vec3())
+    fun pos(obj: Vec3) : Vec3? {
         val o = __offset(12)
         return if (o != 0) {
             obj.__assign(o + bb_pos, bb)

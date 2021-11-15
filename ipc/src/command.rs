@@ -1,36 +1,78 @@
-use crate::generated::{CommandArgs, CommandType};
+use crate::generated::CommandType;
+use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Copy, Clone)]
-pub enum ResponseType {
+pub enum BodyType {
     Integer,
     String,
     Float,
     Position,
 }
 
-pub enum ReadCommand {
-    Stateless(CommandType, ResponseType),
-    Stateful(CommandArgs, ResponseType),
-    // TODO WithoutResponse?
-}
-
-pub enum ResponseBody<'a> {
-    None,
+pub enum Body<'a> {
     Integer(i32),
     Float(f32),
-    String(&'a str),
+    String(Cow<'a, str>),
     Position { x: f64, y: f64, z: f64 },
 }
 
-impl Display for ResponseBody<'_> {
+#[derive(Default)]
+pub struct CommandState {
+    pub target_entity: Option<i32>,
+}
+
+pub struct Command {
+    pub ty: CommandType,
+    pub state: CommandState,
+    /// Expected response type for a read, or request body type for a write
+    pub body: BodyType,
+}
+
+impl Display for Body<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ResponseBody::None => Ok(()),
-            ResponseBody::Float(val) => Debug::fmt(val, f),
-            ResponseBody::Integer(val) => Display::fmt(val, f),
-            ResponseBody::String(val) => Display::fmt(val, f),
-            ResponseBody::Position { x, y, z } => write!(f, "{:?}\n{:?}\n{:?}", x, y, z),
+            Body::Float(val) => Debug::fmt(val, f),
+            Body::Integer(val) => Display::fmt(val, f),
+            Body::String(val) => Display::fmt(val, f),
+            Body::Position { x, y, z } => write!(f, "{:?} {:?} {:?}", x, y, z),
+        }
+    }
+}
+
+impl Command {
+    pub fn stateful(cmd: CommandType, resp: BodyType, state: CommandState) -> Self {
+        Self {
+            ty: cmd,
+            state,
+            body: resp,
+        }
+    }
+
+    pub fn stateless(cmd: CommandType, resp: BodyType) -> Self {
+        Self::stateful(cmd, resp, CommandState::default())
+    }
+}
+
+impl BodyType {
+    pub fn create_from_data<'a>(&self, data: &'a [u8]) -> Option<Body<'a>> {
+        let data = std::str::from_utf8(data).ok()?.trim_end();
+        match self {
+            BodyType::Float => data.parse().ok().map(Body::Float),
+            BodyType::Integer => data.parse().ok().map(Body::Integer),
+            BodyType::String => Some(Body::String(data.into())),
+            BodyType::Position => {
+                let xyz = data.split_whitespace();
+                let mut iter = xyz.into_iter().take(3).map(|s| s.parse());
+
+                if let (Some(Ok(x)), Some(Ok(y)), Some(Ok(z))) =
+                    (iter.next(), iter.next(), iter.next())
+                {
+                    Some(Body::Position { x, y, z })
+                } else {
+                    None
+                }
+            }
         }
     }
 }

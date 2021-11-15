@@ -27,6 +27,15 @@ class Command : Table() {
             val o = __offset(6)
             return if(o != 0) bb.getInt(o + bb_pos) else null
         }
+    val write : MCFS.WriteBody? get() = write(MCFS.WriteBody())
+    fun write(obj: MCFS.WriteBody) : MCFS.WriteBody? {
+        val o = __offset(8)
+        return if (o != 0) {
+            obj.__assign(__indirect(o + bb_pos), bb)
+        } else {
+            null
+        }
+    }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_2_0_0()
         fun getRootAsCommand(_bb: ByteBuffer): Command = getRootAsCommand(_bb, Command())
@@ -34,15 +43,17 @@ class Command : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createCommand(builder: FlatBufferBuilder, cmd: Int, targetEntity: Int?) : Int {
-            builder.startTable(2)
+        fun createCommand(builder: FlatBufferBuilder, cmd: Int, targetEntity: Int?, writeOffset: Int) : Int {
+            builder.startTable(3)
+            addWrite(builder, writeOffset)
             targetEntity?.run { addTargetEntity(builder, targetEntity) }
             addCmd(builder, cmd)
             return endCommand(builder)
         }
-        fun startCommand(builder: FlatBufferBuilder) = builder.startTable(2)
+        fun startCommand(builder: FlatBufferBuilder) = builder.startTable(3)
         fun addCmd(builder: FlatBufferBuilder, cmd: Int) = builder.addInt(0, cmd, 0)
         fun addTargetEntity(builder: FlatBufferBuilder, targetEntity: Int) = builder.addInt(1, targetEntity, 0)
+        fun addWrite(builder: FlatBufferBuilder, write: Int) = builder.addOffset(2, write, 0)
         fun endCommand(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

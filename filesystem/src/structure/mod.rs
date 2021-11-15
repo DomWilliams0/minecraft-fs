@@ -12,8 +12,7 @@ mod structure {
     use crate::structure::registry::{FilesystemEntry, LinkEntry};
     use std::borrow::Cow;
 
-    use ipc::generated::CommandArgs;
-    use ipc::{generated::CommandType, ReadCommand, ResponseType};
+    use ipc::{generated::CommandType, BodyType, Command, CommandState};
     use registry::{DirEntry, EntryRef, FileEntry, Registration};
 
     use std::ffi::{OsStr, OsString};
@@ -35,18 +34,40 @@ mod structure {
     }
     macro_rules! entity_file_entry {
         ($ty:ident, $cmd:expr, $resp:expr) => {
+            entity_file_entry!(manual $ty, $cmd, $resp, fn write(&self) -> Option<Command> {None} );
+        };
+
+        ($ty:ident, $cmd:expr, $resp:expr; write) => {
+            entity_file_entry!(
+                manual
+                $ty,
+                $cmd,
+                $resp,
+                fn write(&self) -> Option<Command> {Some(Command::stateful(
+                    $cmd,
+                    $resp,
+                    CommandState {
+                        target_entity: Some(self.0)
+                    },
+                ))}
+            );
+        };
+
+        (manual $ty:ident, $cmd:expr, $resp:expr, $write:item) => {
             struct $ty(i32);
 
             impl FileEntry for $ty {
-                fn read(&self) -> Option<ReadCommand> {
-                    Some(ReadCommand::Stateful(
-                        CommandArgs {
-                            cmd: $cmd,
+                fn read(&self) -> Option<Command> {
+                    Some(Command::stateful(
+                        $cmd,
+                        $resp,
+                        CommandState {
                             target_entity: Some(self.0),
                         },
-                        $resp,
                     ))
                 }
+
+                    $write
             }
         };
     }
@@ -114,10 +135,10 @@ mod structure {
 
     file_entry!(PlayerName, "name");
     impl FileEntry for PlayerName {
-        fn read(&self) -> Option<ReadCommand> {
-            Some(ReadCommand::Stateless(
+        fn read(&self) -> Option<Command> {
+            Some(Command::stateless(
                 CommandType::PlayerName,
-                ResponseType::String,
+                BodyType::String,
             ))
         }
     }
@@ -181,11 +202,11 @@ mod structure {
         }
     }
 
-    entity_file_entry!(EntityType, CommandType::EntityType, ResponseType::String);
-    entity_file_entry!(EntityHealth, CommandType::EntityHealth, ResponseType::Float);
+    entity_file_entry!(EntityType, CommandType::EntityType, BodyType::String);
+    entity_file_entry!(EntityHealth, CommandType::EntityHealth, BodyType::Float; write);
     entity_file_entry!(
         EntityPosition,
         CommandType::EntityPosition,
-        ResponseType::Position
+        BodyType::Position; write
     );
 }
