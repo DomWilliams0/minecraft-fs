@@ -13,6 +13,7 @@ pub struct GameState {
 }
 
 pub struct CachedGameState {
+    // TODO use Instant instead
     last_query: SystemTime,
     last_interest: GameStateInterest,
     state: GameState,

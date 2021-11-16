@@ -1,56 +1,55 @@
-#[repr(u32)]
-#[derive(Copy, Clone)]
-enum InodeTag {
-    Standard = 0,
-    EntitiesList = 10,
+use std::collections::VecDeque;
+
+const INODE_BLOCK_SIZE: u64 = 2048;
+
+pub struct InodeBlock {
+    next: u64,
+    end: u64,
 }
 
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct Inode {
-    val: u32,
-    tag: InodeTag,
+pub struct InodeBlockAllocator {
+    free_blocks: VecDeque<InodeBlock>,
+    next_block_start: u64,
 }
 
-// TODO free list
-pub struct InodePool {
-    next: Inode,
-}
-
-impl Inode {
-    pub fn standard(val: u32) -> Self {
+impl Default for InodeBlockAllocator {
+    fn default() -> Self {
         Self {
-            tag: InodeTag::Standard,
-            val,
+            free_blocks: VecDeque::default(),
+            next_block_start: 1,
         }
     }
 }
 
-impl InodePool {
-    pub fn new_dynamic(next: u64) -> Self {
-        Self {
-            next: Inode {
-                tag: InodeTag::EntitiesList,
-                val: next as u32,
-            },
+impl InodeBlockAllocator {
+    pub fn allocate(&mut self) -> InodeBlock {
+        if let Some(top) = self.free_blocks.pop_front() {
+            return top;
         }
+
+        let new_block = InodeBlock {
+            next: self.next_block_start,
+            end: self.next_block_start + INODE_BLOCK_SIZE,
+        };
+        self.next_block_start += INODE_BLOCK_SIZE;
+        new_block
     }
 
-    pub fn allocate(&mut self) -> Inode {
-        let new = self.next;
-        self.next.val += 1;
-        new
+    pub fn free(&mut self, block: InodeBlock) {
+        self.free_blocks.push_back(block)
     }
 }
 
-impl From<u64> for Inode {
-    fn from(u: u64) -> Self {
-        unsafe { std::mem::transmute(u) }
-    }
-}
+impl Iterator for InodeBlock {
+    type Item = u64;
 
-impl From<Inode> for u64 {
-    fn from(i: Inode) -> Self {
-        unsafe { std::mem::transmute(i) }
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next >= self.end {
+            None
+        } else {
+            let inode = self.next;
+            self.next += 1;
+            Some(inode)
+        }
     }
 }

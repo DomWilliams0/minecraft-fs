@@ -1,9 +1,13 @@
 use std::io::{ErrorKind, Read, Write};
 
 use crate::command::{Body, BodyType, CommandState};
-use crate::generated::{CommandArgs, CommandType, Error, GameRequest, GameRequestArgs, GameRequestBody, GameResponse, GameResponseBody, StateRequest, StateRequestArgs, StateResponse, Vec3, WriteBody, WriteBodyArgs};
-use crate::Command;
-use flatbuffers::{FlatBufferBuilder, InvalidFlatbuffer, root};
+use crate::generated::{
+    CommandArgs, CommandType, Error, GameRequest, GameRequestArgs, GameRequestBody, GameResponse,
+    GameResponseBody, StateRequest, StateRequestArgs, StateResponse, Vec3, WriteBody,
+    WriteBodyArgs,
+};
+
+use flatbuffers::{root, FlatBufferBuilder, InvalidFlatbuffer};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -70,19 +74,29 @@ impl IpcChannel {
         })
     }
 
-    pub fn send_read_command(&mut self, cmd: Command) -> Result<Body, IpcError> {
-        self.send_raw_command(cmd.ty, Some(cmd.body), None, cmd.state)
+    pub fn send_read_command(
+        &mut self,
+        cmd: CommandType,
+        resp: BodyType,
+        state: CommandState,
+    ) -> Result<Body, IpcError> {
+        self.send_raw_command(cmd, Some(resp), None, state)
             .map(|opt| opt.expect("response expected"))
     }
 
-    pub fn send_write_command(&mut self, cmd: Command, data: &[u8]) -> Result<usize, IpcError> {
+    pub fn send_write_command(
+        &mut self,
+        cmd: CommandType,
+        body_type: BodyType,
+        data: &[u8],
+        state: CommandState,
+    ) -> Result<usize, IpcError> {
         log::trace!("write data {:?}", data);
-        let write = cmd
-            .body
+        let write = body_type
             .create_from_data(data)
-            .ok_or(IpcError::BadData(cmd.body))?;
+            .ok_or(IpcError::BadData(body_type))?;
 
-        self.send_raw_command(cmd.ty, None, Some(write), cmd.state)?;
+        self.send_raw_command(cmd, None, Some(write), state)?;
         Ok(data.len())
     }
 
