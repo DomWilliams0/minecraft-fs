@@ -123,13 +123,17 @@ fn entities_dir(builder: &mut FilesystemStructureBuilder, root: u64) -> u64 {
         DirEntry::build()
             .dynamic(DynamicStateType::EntityIds, |state, reg| {
                 for id in &state.entity_ids {
-                    let entity_dir = reg.add_root_entry(id.to_string(), DirEntry::default());
+                    let entity_dir = reg.add_root_entry(
+                        id.to_string(),
+                        DirEntry::build()
+                            .associated_data(EntryAssociatedData::EntityId(*id))
+                            .finish(),
+                    );
                     reg.add_static_entry(
                         entity_dir,
                         "health",
                         FileEntry::build()
                             .behaviour(ReadWrite(CommandType::EntityHealth, Float))
-                            .associated_data(EntityId(*id))
                             .finish(),
                     );
                     reg.add_static_entry(
@@ -137,7 +141,6 @@ fn entities_dir(builder: &mut FilesystemStructureBuilder, root: u64) -> u64 {
                         "type",
                         FileEntry::build()
                             .behaviour(ReadOnly(CommandType::EntityType, String))
-                            .associated_data(EntityId(*id))
                             .finish(),
                     );
                     reg.add_static_entry(
@@ -145,7 +148,6 @@ fn entities_dir(builder: &mut FilesystemStructureBuilder, root: u64) -> u64 {
                         "position",
                         FileEntry::build()
                             .behaviour(ReadWrite(CommandType::EntityPosition, Position))
-                            .associated_data(EntityId(*id))
                             .finish(),
                     );
                 }
