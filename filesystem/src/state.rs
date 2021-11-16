@@ -1,14 +1,16 @@
-use ipc::generated::StateRequestArgs;
+use ipc::generated::{Dimension, StateRequestArgs};
 use ipc::{IpcChannel, IpcError};
 use std::fmt::{Debug, Formatter};
 
+use log::trace;
 use std::time::{Duration, SystemTime};
 
 const CACHE_TIME: Duration = Duration::from_millis(500);
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct GameState {
     pub player_entity_id: Option<i32>,
+    pub player_world: Option<Dimension>,
     pub entity_ids: Vec<i32>,
 }
 
@@ -58,11 +60,13 @@ impl CachedGameState {
 
             self.state = GameState {
                 player_entity_id: response.player_entity_id(),
+                player_world: response.player_world(),
                 entity_ids: response
                     .entity_ids()
                     .map(|v| v.into_iter().collect())
                     .unwrap_or_default(),
             };
+            trace!("new game state: {:?}", self.state);
             self.last_query = now;
             self.last_interest = interest;
         }
@@ -77,6 +81,7 @@ impl Debug for GameStateInterestWrapper<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GameStateInterest")
             .field("entities_by_id", &self.0.entities_by_id)
+            .field("target_world", &self.0.target_world)
             .finish()
     }
 }

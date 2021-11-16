@@ -22,8 +22,13 @@ class StateResponse : Table() {
             val o = __offset(4)
             return if(o != 0) bb.getInt(o + bb_pos) else null
         }
+    val playerWorld : UByte?
+        get() {
+            val o = __offset(6)
+            return if(o != 0) bb.get(o + bb_pos).toUByte() else null
+        }
     fun entityIds(j: Int) : Int {
-        val o = __offset(6)
+        val o = __offset(8)
         return if (o != 0) {
             bb.getInt(__vector(o) + j * 4)
         } else {
@@ -32,10 +37,10 @@ class StateResponse : Table() {
     }
     val entityIdsLength : Int
         get() {
-            val o = __offset(6); return if (o != 0) __vector_len(o) else 0
+            val o = __offset(8); return if (o != 0) __vector_len(o) else 0
         }
-    val entityIdsAsByteBuffer : ByteBuffer get() = __vector_as_bytebuffer(6, 4)
-    fun entityIdsInByteBuffer(_bb: ByteBuffer) : ByteBuffer = __vector_in_bytebuffer(_bb, 6, 4)
+    val entityIdsAsByteBuffer : ByteBuffer get() = __vector_as_bytebuffer(8, 4)
+    fun entityIdsInByteBuffer(_bb: ByteBuffer) : ByteBuffer = __vector_in_bytebuffer(_bb, 8, 4)
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_2_0_0()
         fun getRootAsStateResponse(_bb: ByteBuffer): StateResponse = getRootAsStateResponse(_bb, StateResponse())
@@ -43,15 +48,17 @@ class StateResponse : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createStateResponse(builder: FlatBufferBuilder, playerEntityId: Int?, entityIdsOffset: Int) : Int {
-            builder.startTable(2)
+        fun createStateResponse(builder: FlatBufferBuilder, playerEntityId: Int?, playerWorld: UByte?, entityIdsOffset: Int) : Int {
+            builder.startTable(3)
             addEntityIds(builder, entityIdsOffset)
             playerEntityId?.run { addPlayerEntityId(builder, playerEntityId) }
+            playerWorld?.run { addPlayerWorld(builder, playerWorld) }
             return endStateResponse(builder)
         }
-        fun startStateResponse(builder: FlatBufferBuilder) = builder.startTable(2)
+        fun startStateResponse(builder: FlatBufferBuilder) = builder.startTable(3)
         fun addPlayerEntityId(builder: FlatBufferBuilder, playerEntityId: Int) = builder.addInt(0, playerEntityId, 0)
-        fun addEntityIds(builder: FlatBufferBuilder, entityIds: Int) = builder.addOffset(1, entityIds, 0)
+        fun addPlayerWorld(builder: FlatBufferBuilder, playerWorld: UByte) = builder.addByte(1, playerWorld.toByte(), 0)
+        fun addEntityIds(builder: FlatBufferBuilder, entityIds: Int) = builder.addOffset(2, entityIds, 0)
         fun createEntityIdsVector(builder: FlatBufferBuilder, data: IntArray) : Int {
             builder.startVector(4, data.size, 4)
             for (i in data.size - 1 downTo 0) {

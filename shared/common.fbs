@@ -5,3 +5,9 @@ struct Vec3 {
     y:double;
     z:double;
 }
+
+enum Dimension:uint8 {
+    Overworld = 1,
+    Nether,
+    End
+}

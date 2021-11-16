@@ -167,6 +167,7 @@ impl IpcChannel {
                 &CommandArgs {
                     cmd,
                     target_entity: state.target_entity,
+                    target_world: state.target_world,
                     write: write_body,
                 },
             )

@@ -21,6 +21,9 @@ table Response {
 table StateResponse {
     // null if not in game
     player_entity_id:int32 = null;
+    // null if not in game
+    player_world:Dimension = null;
+    // only present if requested
     entity_ids:[int32];
 }
 

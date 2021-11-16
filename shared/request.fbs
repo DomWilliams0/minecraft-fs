@@ -6,6 +6,8 @@ enum CommandType:int32 {
 	EntityType,
 	EntityPosition,
 	EntityHealth,
+
+	WorldTime,
 }
 
 
@@ -19,6 +21,8 @@ table WriteBody {
 table Command {
     cmd:CommandType;
     target_entity:int32 = null;
+    target_world:Dimension = null;
+
     // if null, command is a read
     write:WriteBody;
 }
@@ -27,6 +31,7 @@ table Command {
 
 table StateRequest {
     entities_by_id: bool = false;
+    target_world:Dimension = null;
 }
 
 union GameRequestBody {Command, StateRequest}

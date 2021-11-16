@@ -19,22 +19,117 @@ pub mod mcfs {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MIN_COMMAND_TYPE: i32 = 0;
+    pub const ENUM_MIN_DIMENSION: u8 = 1;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_COMMAND_TYPE: i32 = 3;
+    pub const ENUM_MAX_DIMENSION: u8 = 3;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 4] = [
+    pub const ENUM_VALUES_DIMENSION: [Dimension; 3] =
+        [Dimension::Overworld, Dimension::Nether, Dimension::End];
+
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+    #[repr(transparent)]
+    pub struct Dimension(pub u8);
+    #[allow(non_upper_case_globals)]
+    impl Dimension {
+        pub const Overworld: Self = Self(1);
+        pub const Nether: Self = Self(2);
+        pub const End: Self = Self(3);
+
+        pub const ENUM_MIN: u8 = 1;
+        pub const ENUM_MAX: u8 = 3;
+        pub const ENUM_VALUES: &'static [Self] = &[Self::Overworld, Self::Nether, Self::End];
+        /// Returns the variant's name or "" if unknown.
+        pub fn variant_name(self) -> Option<&'static str> {
+            match self {
+                Self::Overworld => Some("Overworld"),
+                Self::Nether => Some("Nether"),
+                Self::End => Some("End"),
+                _ => None,
+            }
+        }
+    }
+    impl std::fmt::Debug for Dimension {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            if let Some(name) = self.variant_name() {
+                f.write_str(name)
+            } else {
+                f.write_fmt(format_args!("<UNKNOWN {:?}>", self.0))
+            }
+        }
+    }
+    impl<'a> flatbuffers::Follow<'a> for Dimension {
+        type Inner = Self;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            let b = unsafe { flatbuffers::read_scalar_at::<u8>(buf, loc) };
+            Self(b)
+        }
+    }
+
+    impl flatbuffers::Push for Dimension {
+        type Output = Dimension;
+        #[inline]
+        fn push(&self, dst: &mut [u8], _rest: &[u8]) {
+            unsafe {
+                flatbuffers::emplace_scalar::<u8>(dst, self.0);
+            }
+        }
+    }
+
+    impl flatbuffers::EndianScalar for Dimension {
+        #[inline]
+        fn to_little_endian(self) -> Self {
+            let b = u8::to_le(self.0);
+            Self(b)
+        }
+        #[inline]
+        #[allow(clippy::wrong_self_convention)]
+        fn from_little_endian(self) -> Self {
+            let b = u8::from_le(self.0);
+            Self(b)
+        }
+    }
+
+    impl<'a> flatbuffers::Verifiable for Dimension {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            u8::run_verifier(v, pos)
+        }
+    }
+
+    impl flatbuffers::SimpleToVerifyInSlice for Dimension {}
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    pub const ENUM_MIN_COMMAND_TYPE: i32 = 0;
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    pub const ENUM_MAX_COMMAND_TYPE: i32 = 4;
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    #[allow(non_camel_case_types)]
+    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 5] = [
         CommandType::PlayerName,
         CommandType::EntityType,
         CommandType::EntityPosition,
         CommandType::EntityHealth,
+        CommandType::WorldTime,
     ];
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -46,14 +141,16 @@ pub mod mcfs {
         pub const EntityType: Self = Self(1);
         pub const EntityPosition: Self = Self(2);
         pub const EntityHealth: Self = Self(3);
+        pub const WorldTime: Self = Self(4);
 
         pub const ENUM_MIN: i32 = 0;
-        pub const ENUM_MAX: i32 = 3;
+        pub const ENUM_MAX: i32 = 4;
         pub const ENUM_VALUES: &'static [Self] = &[
             Self::PlayerName,
             Self::EntityType,
             Self::EntityPosition,
             Self::EntityHealth,
+            Self::WorldTime,
         ];
         /// Returns the variant's name or "" if unknown.
         pub fn variant_name(self) -> Option<&'static str> {
@@ -62,6 +159,7 @@ pub mod mcfs {
                 Self::EntityType => Some("EntityType"),
                 Self::EntityPosition => Some("EntityPosition"),
                 Self::EntityHealth => Some("EntityHealth"),
+                Self::WorldTime => Some("WorldTime"),
                 _ => None,
             }
         }
@@ -764,12 +862,16 @@ pub mod mcfs {
                 builder.add_target_entity(x);
             }
             builder.add_cmd(args.cmd);
+            if let Some(x) = args.target_world {
+                builder.add_target_world(x);
+            }
             builder.finish()
         }
 
         pub const VT_CMD: flatbuffers::VOffsetT = 4;
         pub const VT_TARGET_ENTITY: flatbuffers::VOffsetT = 6;
-        pub const VT_WRITE: flatbuffers::VOffsetT = 8;
+        pub const VT_TARGET_WORLD: flatbuffers::VOffsetT = 8;
+        pub const VT_WRITE: flatbuffers::VOffsetT = 10;
 
         #[inline]
         pub fn cmd(&self) -> CommandType {
@@ -780,6 +882,10 @@ pub mod mcfs {
         #[inline]
         pub fn target_entity(&self) -> Option<i32> {
             self._tab.get::<i32>(Command::VT_TARGET_ENTITY, None)
+        }
+        #[inline]
+        pub fn target_world(&self) -> Option<Dimension> {
+            self._tab.get::<Dimension>(Command::VT_TARGET_WORLD, None)
         }
         #[inline]
         pub fn write(&self) -> Option<WriteBody<'a>> {
@@ -798,6 +904,7 @@ pub mod mcfs {
             v.visit_table(pos)?
                 .visit_field::<CommandType>(&"cmd", Self::VT_CMD, false)?
                 .visit_field::<i32>(&"target_entity", Self::VT_TARGET_ENTITY, false)?
+                .visit_field::<Dimension>(&"target_world", Self::VT_TARGET_WORLD, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<WriteBody>>(
                     &"write",
                     Self::VT_WRITE,
@@ -810,6 +917,7 @@ pub mod mcfs {
     pub struct CommandArgs<'a> {
         pub cmd: CommandType,
         pub target_entity: Option<i32>,
+        pub target_world: Option<Dimension>,
         pub write: Option<flatbuffers::WIPOffset<WriteBody<'a>>>,
     }
     impl<'a> Default for CommandArgs<'a> {
@@ -818,6 +926,7 @@ pub mod mcfs {
             CommandArgs {
                 cmd: CommandType::PlayerName,
                 target_entity: None,
+                target_world: None,
                 write: None,
             }
         }
@@ -836,6 +945,11 @@ pub mod mcfs {
         pub fn add_target_entity(&mut self, target_entity: i32) {
             self.fbb_
                 .push_slot_always::<i32>(Command::VT_TARGET_ENTITY, target_entity);
+        }
+        #[inline]
+        pub fn add_target_world(&mut self, target_world: Dimension) {
+            self.fbb_
+                .push_slot_always::<Dimension>(Command::VT_TARGET_WORLD, target_world);
         }
         #[inline]
         pub fn add_write(&mut self, write: flatbuffers::WIPOffset<WriteBody<'b>>) {
@@ -862,6 +976,7 @@ pub mod mcfs {
             let mut ds = f.debug_struct("Command");
             ds.field("cmd", &self.cmd());
             ds.field("target_entity", &self.target_entity());
+            ds.field("target_world", &self.target_world());
             ds.field("write", &self.write());
             ds.finish()
         }
@@ -894,17 +1009,26 @@ pub mod mcfs {
             args: &'args StateRequestArgs,
         ) -> flatbuffers::WIPOffset<StateRequest<'bldr>> {
             let mut builder = StateRequestBuilder::new(_fbb);
+            if let Some(x) = args.target_world {
+                builder.add_target_world(x);
+            }
             builder.add_entities_by_id(args.entities_by_id);
             builder.finish()
         }
 
         pub const VT_ENTITIES_BY_ID: flatbuffers::VOffsetT = 4;
+        pub const VT_TARGET_WORLD: flatbuffers::VOffsetT = 6;
 
         #[inline]
         pub fn entities_by_id(&self) -> bool {
             self._tab
                 .get::<bool>(StateRequest::VT_ENTITIES_BY_ID, Some(false))
                 .unwrap()
+        }
+        #[inline]
+        pub fn target_world(&self) -> Option<Dimension> {
+            self._tab
+                .get::<Dimension>(StateRequest::VT_TARGET_WORLD, None)
         }
     }
 
@@ -917,18 +1041,21 @@ pub mod mcfs {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
                 .visit_field::<bool>(&"entities_by_id", Self::VT_ENTITIES_BY_ID, false)?
+                .visit_field::<Dimension>(&"target_world", Self::VT_TARGET_WORLD, false)?
                 .finish();
             Ok(())
         }
     }
     pub struct StateRequestArgs {
         pub entities_by_id: bool,
+        pub target_world: Option<Dimension>,
     }
     impl<'a> Default for StateRequestArgs {
         #[inline]
         fn default() -> Self {
             StateRequestArgs {
                 entities_by_id: false,
+                target_world: None,
             }
         }
     }
@@ -941,6 +1068,11 @@ pub mod mcfs {
         pub fn add_entities_by_id(&mut self, entities_by_id: bool) {
             self.fbb_
                 .push_slot::<bool>(StateRequest::VT_ENTITIES_BY_ID, entities_by_id, false);
+        }
+        #[inline]
+        pub fn add_target_world(&mut self, target_world: Dimension) {
+            self.fbb_
+                .push_slot_always::<Dimension>(StateRequest::VT_TARGET_WORLD, target_world);
         }
         #[inline]
         pub fn new(
@@ -963,6 +1095,7 @@ pub mod mcfs {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let mut ds = f.debug_struct("StateRequest");
             ds.field("entities_by_id", &self.entities_by_id());
+            ds.field("target_world", &self.target_world());
             ds.finish()
         }
     }
@@ -1356,16 +1489,25 @@ pub mod mcfs {
             if let Some(x) = args.player_entity_id {
                 builder.add_player_entity_id(x);
             }
+            if let Some(x) = args.player_world {
+                builder.add_player_world(x);
+            }
             builder.finish()
         }
 
         pub const VT_PLAYER_ENTITY_ID: flatbuffers::VOffsetT = 4;
-        pub const VT_ENTITY_IDS: flatbuffers::VOffsetT = 6;
+        pub const VT_PLAYER_WORLD: flatbuffers::VOffsetT = 6;
+        pub const VT_ENTITY_IDS: flatbuffers::VOffsetT = 8;
 
         #[inline]
         pub fn player_entity_id(&self) -> Option<i32> {
             self._tab
                 .get::<i32>(StateResponse::VT_PLAYER_ENTITY_ID, None)
+        }
+        #[inline]
+        pub fn player_world(&self) -> Option<Dimension> {
+            self._tab
+                .get::<Dimension>(StateResponse::VT_PLAYER_WORLD, None)
         }
         #[inline]
         pub fn entity_ids(&self) -> Option<flatbuffers::Vector<'a, i32>> {
@@ -1386,6 +1528,7 @@ pub mod mcfs {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
                 .visit_field::<i32>(&"player_entity_id", Self::VT_PLAYER_ENTITY_ID, false)?
+                .visit_field::<Dimension>(&"player_world", Self::VT_PLAYER_WORLD, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, i32>>>(
                     &"entity_ids",
                     Self::VT_ENTITY_IDS,
@@ -1397,6 +1540,7 @@ pub mod mcfs {
     }
     pub struct StateResponseArgs<'a> {
         pub player_entity_id: Option<i32>,
+        pub player_world: Option<Dimension>,
         pub entity_ids: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, i32>>>,
     }
     impl<'a> Default for StateResponseArgs<'a> {
@@ -1404,6 +1548,7 @@ pub mod mcfs {
         fn default() -> Self {
             StateResponseArgs {
                 player_entity_id: None,
+                player_world: None,
                 entity_ids: None,
             }
         }
@@ -1417,6 +1562,11 @@ pub mod mcfs {
         pub fn add_player_entity_id(&mut self, player_entity_id: i32) {
             self.fbb_
                 .push_slot_always::<i32>(StateResponse::VT_PLAYER_ENTITY_ID, player_entity_id);
+        }
+        #[inline]
+        pub fn add_player_world(&mut self, player_world: Dimension) {
+            self.fbb_
+                .push_slot_always::<Dimension>(StateResponse::VT_PLAYER_WORLD, player_world);
         }
         #[inline]
         pub fn add_entity_ids(
@@ -1449,6 +1599,7 @@ pub mod mcfs {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let mut ds = f.debug_struct("StateResponse");
             ds.field("player_entity_id", &self.player_entity_id());
+            ds.field("player_world", &self.player_world());
             ds.field("entity_ids", &self.entity_ids());
             ds.finish()
         }

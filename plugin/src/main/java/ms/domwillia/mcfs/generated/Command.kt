@@ -27,9 +27,14 @@ class Command : Table() {
             val o = __offset(6)
             return if(o != 0) bb.getInt(o + bb_pos) else null
         }
+    val targetWorld : UByte?
+        get() {
+            val o = __offset(8)
+            return if(o != 0) bb.get(o + bb_pos).toUByte() else null
+        }
     val write : MCFS.WriteBody? get() = write(MCFS.WriteBody())
     fun write(obj: MCFS.WriteBody) : MCFS.WriteBody? {
-        val o = __offset(8)
+        val o = __offset(10)
         return if (o != 0) {
             obj.__assign(__indirect(o + bb_pos), bb)
         } else {
@@ -43,17 +48,19 @@ class Command : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createCommand(builder: FlatBufferBuilder, cmd: Int, targetEntity: Int?, writeOffset: Int) : Int {
-            builder.startTable(3)
+        fun createCommand(builder: FlatBufferBuilder, cmd: Int, targetEntity: Int?, targetWorld: UByte?, writeOffset: Int) : Int {
+            builder.startTable(4)
             addWrite(builder, writeOffset)
             targetEntity?.run { addTargetEntity(builder, targetEntity) }
             addCmd(builder, cmd)
+            targetWorld?.run { addTargetWorld(builder, targetWorld) }
             return endCommand(builder)
         }
-        fun startCommand(builder: FlatBufferBuilder) = builder.startTable(3)
+        fun startCommand(builder: FlatBufferBuilder) = builder.startTable(4)
         fun addCmd(builder: FlatBufferBuilder, cmd: Int) = builder.addInt(0, cmd, 0)
         fun addTargetEntity(builder: FlatBufferBuilder, targetEntity: Int) = builder.addInt(1, targetEntity, 0)
-        fun addWrite(builder: FlatBufferBuilder, write: Int) = builder.addOffset(2, write, 0)
+        fun addTargetWorld(builder: FlatBufferBuilder, targetWorld: UByte) = builder.addByte(2, targetWorld.toByte(), 0)
+        fun addWrite(builder: FlatBufferBuilder, write: Int) = builder.addOffset(3, write, 0)
         fun endCommand(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

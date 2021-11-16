@@ -1,4 +1,4 @@
-use crate::generated::CommandType;
+use crate::generated::{CommandType, Dimension};
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
@@ -20,6 +20,7 @@ pub enum Body<'a> {
 #[derive(Default)]
 pub struct CommandState {
     pub target_entity: Option<i32>,
+    pub target_world: Option<Dimension>,
 }
 
 pub struct Command {

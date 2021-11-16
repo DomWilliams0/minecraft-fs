@@ -1,7 +1,6 @@
 package ms.domwillia.mcfs.ipc
 
 import MCFS.*
-import MCFS.Common.Vec3
 import com.google.flatbuffers.FlatBufferBuilder
 import ms.domwillia.mcfs.MinecraftFsMod
 import net.minecraft.client.MinecraftClient
@@ -10,12 +9,14 @@ import net.minecraft.entity.LivingEntity
 import net.minecraft.entity.damage.DamageSource
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.network.ServerPlayerEntity
+import net.minecraft.server.world.ServerWorld
 import net.minecraft.util.math.Box
 import net.minecraft.util.math.Vec3d
+import net.minecraft.world.World
 import java.nio.ByteBuffer
 
 class NoGameException : Exception()
-class MissingTargetEntityException : Exception()
+class MissingTargetException : Exception()
 class NotLivingException : Exception()
 class UnknownEntityException(val id: Int) : Exception()
 class UnsupportedOperationException : Exception()
@@ -34,8 +35,8 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                     executeCommand(request.body(Command()) as Command)
                 } catch (_: NoGameException) {
                     mkError(Error.NoGame)
-                } catch (_: MissingTargetEntityException) {
-                    MinecraftFsMod.LOGGER.error("missing target entity")
+                } catch (_: MissingTargetException) {
+                    MinecraftFsMod.LOGGER.error("missing target info")
                     mkError(Error.MalformedRequest)
                 } catch (e: UnknownEntityException) {
                     MinecraftFsMod.LOGGER.error("no such entity ${e.id}")
@@ -84,7 +85,6 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                 } else {
                     if (value < entity.health) {
                         entity.damage(DamageSource.OUT_OF_WORLD, entity.health - value)
-
                     } else {
                         entity.health = value
                     }
@@ -97,6 +97,15 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                     mkPosition(entity.pos)
                 } else {
                     entity.teleport(value.x, value.y, value.z)
+                }
+            }
+            CommandType.WorldTime -> {
+                val value = command.rwInt()
+                val world = getTargetWorld(command)
+                if (value == null) {
+                    mkInt(world.timeOfDay.toInt())
+                } else {
+                    world.timeOfDay = value.toLong()
                 }
             }
             else -> {
@@ -112,12 +121,12 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
         // null if not in game
         val server = theServerOpt
         val player = server?.thePlayer
+        val world = req.targetWorld?.let(this::resolveWorld)
 
-        val entityIds = if (player != null && req.entitiesById) {
+        val entityIds = if (world != null && req.entitiesById) {
             val bounds = -10_000.0;
             val box = Box(Vec3d(-bounds, -bounds, -bounds), Vec3d(bounds, bounds, bounds))
-            // TODO specify world name
-            val entities = player.world.getOtherEntities(null, box);
+            val entities = world.getOtherEntities(null, box);
 
             StateResponse.createEntityIdsVector(responseBuilder, entities.map { e -> e.id }.toIntArray())
         } else {
@@ -127,6 +136,14 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
         StateResponse.startStateResponse(responseBuilder);
         if (player != null) {
             StateResponse.addPlayerEntityId(responseBuilder, player.id);
+            StateResponse.addPlayerWorld(
+                responseBuilder, when (player.world.registryKey) {
+                    World.OVERWORLD -> Dimension.Overworld
+                    World.NETHER -> Dimension.Nether
+                    World.END -> Dimension.End
+                    else -> throw IllegalArgumentException("unknown dimension")
+                }
+            )
         }
 
         if (entityIds != null) {
@@ -141,8 +158,8 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
     private val theServer: MinecraftServer
         get() = theServerOpt ?: throw NoGameException()
 
-    private val MinecraftServer.thePlayer: ServerPlayerEntity
-        get() = playerManager?.getPlayer(MinecraftClient.getInstance().session.username)!! // should be present
+    private val MinecraftServer.thePlayer: ServerPlayerEntity?
+        get() = playerManager?.getPlayer(MinecraftClient.getInstance().session.username)
 
 
     private fun mkError(err: Int): Int {
@@ -154,6 +171,12 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
     private fun mkFloat(float: Float): Int {
         Response.startResponse(responseBuilder)
         Response.addFloat(responseBuilder, float)
+        return Response.endResponse(responseBuilder)
+    }
+
+    private fun mkInt(int: Int): Int {
+        Response.startResponse(responseBuilder)
+        Response.addInt(responseBuilder, int)
         return Response.endResponse(responseBuilder)
     }
 
@@ -171,16 +194,31 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
         return Response.endResponse(responseBuilder)
     }
 
-    // TODO specify world explicitly
     private fun getTargetEntity(command: Command): Entity {
-        val id = command.targetEntity ?: throw MissingTargetEntityException();
-        val world = theServer.thePlayer.world
+        val id = command.targetEntity ?: throw MissingTargetException();
+        val world = getTargetWorld(command)
         return world.getEntityById(id) ?: throw UnknownEntityException(id)
     }
 
     private fun getTargetLivingEntity(command: Command): LivingEntity {
         return getTargetEntity(command) as? LivingEntity? ?: throw NotLivingException()
     }
+
+    private fun getTargetWorld(command: Command): ServerWorld {
+        val dim = command.targetWorld ?: throw MissingTargetException()
+        return resolveWorld(dim) ?: throw IllegalArgumentException("world not found")
+    }
+
+    private fun resolveWorld(dim: UByte): ServerWorld? {
+        val server = theServer;
+        return when (dim) {
+            Dimension.Overworld -> server.getWorld(World.OVERWORLD)
+            Dimension.Nether -> server.getWorld(World.NETHER)
+            Dimension.End -> server.getWorld(World.END)
+            else -> null
+        }
+    }
+
 
     private fun Command.ro() {
         if (this.write != null) throw UnsupportedOperationException()
@@ -190,6 +228,15 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
         val writeBody = this.write;
         return if (writeBody != null) {
             writeBody.float ?: throw InvalidTypeForWriteException()
+        } else {
+            null
+        }
+    }
+
+    private fun Command.rwInt(): Int? {
+        val writeBody = this.write;
+        return if (writeBody != null) {
+            writeBody.int ?: throw InvalidTypeForWriteException()
         } else {
             null
         }

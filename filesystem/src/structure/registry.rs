@@ -1,6 +1,6 @@
 use crate::state::{GameState, GameStateInterest};
 use crate::structure::inode::{InodeBlock, InodeBlockAllocator};
-use ipc::generated::CommandType;
+use ipc::generated::{CommandType, Dimension};
 use ipc::{BodyType, CommandState};
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -64,6 +64,7 @@ pub type DirFilterFn = fn(&GameState) -> EntryFilterResult;
 #[derive(Default)]
 pub struct DirEntry {
     dynamic: Option<(DynamicStateType, DynamicDirFn)>,
+    associated_data: Option<EntryAssociatedData>,
     filter: Option<DirFilterFn>,
 }
 
@@ -103,13 +104,14 @@ pub enum FileBehaviour {
 
 pub enum EntryAssociatedData {
     EntityId(i32),
-    World(u8), // TODO
+    World(Dimension),
 }
 
 pub struct DynamicInterest {
     /// (inode, interest)
     inodes: SmallVec<[(u64, DynamicStateType); 2]>,
     need_fetching: HashSet<DynamicStateType>,
+    interest: GameStateInterest,
 }
 
 impl FilesystemStructure {
@@ -170,14 +172,27 @@ impl FilesystemStructure {
     /// an interest for the whole hierarchy
     pub fn interest_for_inode(&self, inode: u64) -> DynamicInterest {
         let mut dynamics_required = SmallVec::new();
+        let mut interest = GameStateInterest::default();
 
         self.walk_ancestors(inode, |ancestor| {
             let entry = self.get_inode(ancestor);
-            if let Entry::Dir(dir) = entry {
-                if let Some((interest, _)) = dir.dynamic {
-                    dynamics_required.push((ancestor, interest));
+            match entry {
+                Entry::Dir(dir) => {
+                    if let Some((interest, _)) = dir.dynamic {
+                        dynamics_required.push((ancestor, interest));
+                    }
+
+                    if let Some(data) = dir.associated_data.as_ref() {
+                        data.apply_to_interest(&mut interest)
+                    }
                 }
-            }
+                Entry::File(f) => {
+                    if let Some(data) = f.associated_data.as_ref() {
+                        data.apply_to_interest(&mut interest)
+                    }
+                }
+                _ => {}
+            };
         });
 
         let mut need_fetching = HashSet::new();
@@ -192,9 +207,19 @@ impl FilesystemStructure {
             need_fetching.insert(*interest);
         }
 
+        // apply interest
+        for dynamic in need_fetching.iter() {
+            match dynamic {
+                DynamicStateType::EntityIds => {
+                    interest.entities_by_id = true;
+                }
+            }
+        }
+
         DynamicInterest {
             inodes: dynamics_required,
             need_fetching,
+            interest,
         }
     }
 
@@ -242,6 +267,24 @@ impl FilesystemStructure {
         }
     }
 
+    pub fn command_state_for_file(&self, file: u64) -> CommandState {
+        let mut state = CommandState::default();
+
+        self.walk_ancestors(file, |inode| {
+            let associated_data = self.lookup_inode(inode).and_then(|e| match e {
+                Entry::File(f) => f.associated_data.as_ref(),
+                Entry::Dir(d) => d.associated_data.as_ref(),
+                _ => None,
+            });
+
+            if let Some(data) = associated_data {
+                data.apply_to_state(&mut state);
+            }
+        });
+
+        state
+    }
+
     fn walk_ancestors(&self, child: u64, mut per_parent: impl FnMut(u64)) {
         per_parent(child);
 
@@ -255,16 +298,7 @@ impl FilesystemStructure {
 
 impl DynamicInterest {
     pub fn as_interest(&self) -> GameStateInterest {
-        let mut interest = GameStateInterest::default();
-        for dynamic in self.need_fetching.iter() {
-            match dynamic {
-                DynamicStateType::EntityIds => {
-                    interest.entities_by_id = true;
-                }
-            }
-        }
-
-        interest
+        GameStateInterest { ..self.interest }
     }
 }
 
@@ -273,12 +307,7 @@ impl FilesystemStructureBuilder {
         self.inner.root
     }
 
-    pub fn add_static_entry(
-        &mut self,
-        parent: u64,
-        name: &'static str,
-        entry: impl Into<Entry>,
-    ) -> u64 {
+    pub fn add_entry(&mut self, parent: u64, name: &'static str, entry: impl Into<Entry>) -> u64 {
         self.new_static_with_opt_parent(entry.into(), Some((parent, name)))
     }
 
@@ -356,6 +385,7 @@ impl FileEntryBuilder {
         self
     }
 
+    /// Overrides parent directory
     pub fn associated_data(mut self, data: EntryAssociatedData) -> Self {
         self.0.associated_data = Some(data);
         self
@@ -378,15 +408,6 @@ impl FileEntry {
 
     pub fn behaviour(&self) -> Option<FileBehaviour> {
         self.behaviour
-    }
-
-    pub fn command_state(&self) -> CommandState {
-        let mut state = CommandState::default();
-        if let Some(associated) = self.associated_data.as_ref() {
-            associated.apply_to_state(&mut state);
-        }
-
-        state
     }
 }
 
@@ -430,6 +451,11 @@ impl DirEntryBuilder {
         self
     }
 
+    pub fn associated_data(mut self, data: EntryAssociatedData) -> Self {
+        self.0.associated_data = Some(data);
+        self
+    }
+
     pub fn filter(mut self, filter: DirFilterFn) -> Self {
         self.0.filter = Some(filter);
         self
@@ -443,8 +469,22 @@ impl DirEntryBuilder {
 impl EntryAssociatedData {
     fn apply_to_state(&self, state: &mut CommandState) {
         match self {
-            EntryAssociatedData::EntityId(id) => state.target_entity = Some(*id),
-            EntryAssociatedData::World(_) => todo!(),
+            EntryAssociatedData::EntityId(id) if state.target_entity.is_none() => {
+                state.target_entity = Some(*id)
+            }
+            EntryAssociatedData::World(dim) if state.target_world.is_none() => {
+                state.target_world = Some(*dim)
+            }
+            _ => {}
+        }
+    }
+
+    fn apply_to_interest(&self, interest: &mut GameStateInterest) {
+        match self {
+            EntryAssociatedData::World(dim) if interest.target_world.is_none() => {
+                interest.target_world = Some(*dim)
+            }
+            _ => {}
         }
     }
 }

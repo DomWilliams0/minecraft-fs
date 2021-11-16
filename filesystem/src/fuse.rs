@@ -1,19 +1,18 @@
 use std::ffi::OsStr;
 use std::fmt::Write;
-use std::os::unix::ffi::OsStrExt;
 
 use std::time::{Duration, SystemTime};
 
 use fuser::{
-    FileAttr, FileType, ReplyAttr, ReplyBmap, ReplyCreate, ReplyData, ReplyDirectory,
-    ReplyDirectoryPlus, ReplyEmpty, ReplyEntry, ReplyIoctl, ReplyLock, ReplyLseek, ReplyOpen,
-    ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
+    FileAttr, FileType, ReplyAttr, ReplyData, ReplyDirectory, ReplyDirectoryPlus, ReplyEmpty,
+    ReplyEntry, ReplyIoctl, ReplyLock, ReplyLseek, ReplyOpen, ReplyStatfs, ReplyWrite, ReplyXattr,
+    Request, TimeOrNow,
 };
 use log::*;
 
 use ipc::{IpcChannel, IpcError};
 
-use crate::state::{CachedGameState, GameStateInterest};
+use crate::state::CachedGameState;
 use crate::structure::{
     create_structure, Entry, EntryFilterResult, FileBehaviour, FilesystemStructure,
 };
@@ -107,9 +106,8 @@ impl fuser::Filesystem for MinecraftFs {
 
         match self.structure.lookup_inode(ino) {
             Some(Entry::Link(link)) => {
-                let interest = GameStateInterest::default();
-                // TODO need to customise state interest? or pass None
-                let state = match self.state.get(&mut self.ipc, interest) {
+                let interest = self.structure.interest_for_inode(ino);
+                let state = match self.state.get(&mut self.ipc, interest.as_interest()) {
                     Ok(state) => state,
                     Err(err) => {
                         log::error!("failed to fetch game state: {}", err);
@@ -158,7 +156,7 @@ impl fuser::Filesystem for MinecraftFs {
             _ => return reply.error(libc::EOPNOTSUPP),
         };
 
-        let state = file.command_state();
+        let state = self.structure.command_state_for_file(ino);
         let resp = match self.ipc.send_read_command(cmd, resp, state) {
             Ok(resp) => resp,
             Err(err) => {
@@ -209,7 +207,7 @@ impl fuser::Filesystem for MinecraftFs {
             _ => return reply.error(libc::EOPNOTSUPP),
         };
 
-        let state = file.command_state();
+        let state = self.structure.command_state_for_file(ino);
         match self.ipc.send_write_command(cmd, body_type, data, state) {
             Ok(resp) => reply.written(resp as u32),
             Err(err) => {
