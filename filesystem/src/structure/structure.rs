@@ -23,7 +23,16 @@ pub fn create_structure() -> FilesystemStructure {
 }
 
 fn player_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
-    let dir = builder.add_entry(builder.root(), "player", DirEntry::default());
+    let dir = builder.add_entry(
+        builder.root(),
+        "player",
+        DirEntry::build()
+            .associated_data(EntryAssociatedData::PlayerId)
+            .dynamic(DynamicStateType::PlayerId, |_, reg| {
+                mk_entity_dir(reg, reg.parent(), false);
+            })
+            .finish(),
+    );
     builder.add_entry(
         dir,
         "name",
@@ -167,7 +176,7 @@ fn entities_dir(builder: &mut FilesystemStructureBuilder, root: u64) -> u64 {
                             .finish(),
                     );
 
-                    mk_entity_dir(reg, entity_dir);
+                    mk_entity_dir(reg, entity_dir, true);
                 }
             })
             .finish(),
@@ -175,7 +184,7 @@ fn entities_dir(builder: &mut FilesystemStructureBuilder, root: u64) -> u64 {
     dir
 }
 
-fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64) {
+fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, generic: bool) {
     reg.add_entry(
         entity_dir,
         "health",
@@ -185,16 +194,19 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64) {
     );
     reg.add_entry(
         entity_dir,
-        "type",
-        FileEntry::build()
-            .behaviour(ReadOnly(CommandType::EntityType, String))
-            .finish(),
-    );
-    reg.add_entry(
-        entity_dir,
         "position",
         FileEntry::build()
             .behaviour(ReadWrite(CommandType::EntityPosition, Position))
             .finish(),
     );
+
+    if generic {
+        reg.add_entry(
+            entity_dir,
+            "type",
+            FileEntry::build()
+                .behaviour(ReadOnly(CommandType::EntityType, String))
+                .finish(),
+        );
+    }
 }

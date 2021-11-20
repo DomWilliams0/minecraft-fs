@@ -715,8 +715,8 @@ pub mod mcfs {
             args: &'args WriteBodyArgs<'args>,
         ) -> flatbuffers::WIPOffset<WriteBody<'bldr>> {
             let mut builder = WriteBodyBuilder::new(_fbb);
-            if let Some(x) = args.pos {
-                builder.add_pos(x);
+            if let Some(x) = args.vec {
+                builder.add_vec(x);
             }
             if let Some(x) = args.string {
                 builder.add_string(x);
@@ -733,7 +733,7 @@ pub mod mcfs {
         pub const VT_FLOAT: flatbuffers::VOffsetT = 4;
         pub const VT_INT: flatbuffers::VOffsetT = 6;
         pub const VT_STRING: flatbuffers::VOffsetT = 8;
-        pub const VT_POS: flatbuffers::VOffsetT = 10;
+        pub const VT_VEC: flatbuffers::VOffsetT = 10;
 
         #[inline]
         pub fn float(&self) -> Option<f32> {
@@ -749,8 +749,8 @@ pub mod mcfs {
                 .get::<flatbuffers::ForwardsUOffset<&str>>(WriteBody::VT_STRING, None)
         }
         #[inline]
-        pub fn pos(&self) -> Option<&'a Vec3> {
-            self._tab.get::<Vec3>(WriteBody::VT_POS, None)
+        pub fn vec(&self) -> Option<&'a Vec3> {
+            self._tab.get::<Vec3>(WriteBody::VT_VEC, None)
         }
     }
 
@@ -769,7 +769,7 @@ pub mod mcfs {
                     Self::VT_STRING,
                     false,
                 )?
-                .visit_field::<Vec3>(&"pos", Self::VT_POS, false)?
+                .visit_field::<Vec3>(&"vec", Self::VT_VEC, false)?
                 .finish();
             Ok(())
         }
@@ -778,7 +778,7 @@ pub mod mcfs {
         pub float: Option<f32>,
         pub int: Option<i32>,
         pub string: Option<flatbuffers::WIPOffset<&'a str>>,
-        pub pos: Option<&'a Vec3>,
+        pub vec: Option<&'a Vec3>,
     }
     impl<'a> Default for WriteBodyArgs<'a> {
         #[inline]
@@ -787,7 +787,7 @@ pub mod mcfs {
                 float: None,
                 int: None,
                 string: None,
-                pos: None,
+                vec: None,
             }
         }
     }
@@ -811,8 +811,8 @@ pub mod mcfs {
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(WriteBody::VT_STRING, string);
         }
         #[inline]
-        pub fn add_pos(&mut self, pos: &Vec3) {
-            self.fbb_.push_slot_always::<&Vec3>(WriteBody::VT_POS, pos);
+        pub fn add_vec(&mut self, vec: &Vec3) {
+            self.fbb_.push_slot_always::<&Vec3>(WriteBody::VT_VEC, vec);
         }
         #[inline]
         pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> WriteBodyBuilder<'a, 'b> {
@@ -835,7 +835,7 @@ pub mod mcfs {
             ds.field("float", &self.float());
             ds.field("int", &self.int());
             ds.field("string", &self.string());
-            ds.field("pos", &self.pos());
+            ds.field("vec", &self.vec());
             ds.finish()
         }
     }

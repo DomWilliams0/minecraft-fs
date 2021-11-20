@@ -34,8 +34,8 @@ class WriteBody : Table() {
         }
     val stringAsByteBuffer : ByteBuffer get() = __vector_as_bytebuffer(8, 1)
     fun stringInByteBuffer(_bb: ByteBuffer) : ByteBuffer = __vector_in_bytebuffer(_bb, 8, 1)
-    val pos : MCFS.Vec3? get() = pos(MCFS.Vec3())
-    fun pos(obj: MCFS.Vec3) : MCFS.Vec3? {
+    val vec : MCFS.Vec3? get() = vec(MCFS.Vec3())
+    fun vec(obj: MCFS.Vec3) : MCFS.Vec3? {
         val o = __offset(10)
         return if (o != 0) {
             obj.__assign(o + bb_pos, bb)
@@ -54,7 +54,7 @@ class WriteBody : Table() {
         fun addFloat(builder: FlatBufferBuilder, float: Float) = builder.addFloat(0, float, 0.0)
         fun addInt(builder: FlatBufferBuilder, int: Int) = builder.addInt(1, int, 0)
         fun addString(builder: FlatBufferBuilder, string: Int) = builder.addOffset(2, string, 0)
-        fun addPos(builder: FlatBufferBuilder, pos: Int) = builder.addStruct(3, pos, 0)
+        fun addVec(builder: FlatBufferBuilder, vec: Int) = builder.addStruct(3, vec, 0)
         fun endWriteBody(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o
