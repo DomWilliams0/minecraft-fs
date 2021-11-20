@@ -14,12 +14,17 @@ pub enum Body<'a> {
     Integer(i32),
     Float(f32),
     String(Cow<'a, str>),
-    Position { x: f64, y: f64, z: f64 },
+    Vec { x: f64, y: f64, z: f64 },
+}
+
+pub enum TargetEntity {
+    Player,
+    Entity(i32),
 }
 
 #[derive(Default)]
 pub struct CommandState {
-    pub target_entity: Option<i32>,
+    pub target_entity: Option<TargetEntity>,
     pub target_world: Option<Dimension>,
 }
 
@@ -36,7 +41,7 @@ impl Display for Body<'_> {
             Body::Float(val) => Debug::fmt(val, f),
             Body::Integer(val) => Display::fmt(val, f),
             Body::String(val) => Display::fmt(val, f),
-            Body::Position { x, y, z } => write!(f, "{:?} {:?} {:?}", x, y, z),
+            Body::Vec { x, y, z } => write!(f, "{:?} {:?} {:?}", x, y, z),
         }
     }
 }
@@ -69,7 +74,7 @@ impl BodyType {
                 if let (Some(Ok(x)), Some(Ok(y)), Some(Ok(z))) =
                     (iter.next(), iter.next(), iter.next())
                 {
-                    Some(Body::Position { x, y, z })
+                    Some(Body::Vec { x, y, z })
                 } else {
                     None
                 }

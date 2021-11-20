@@ -1,7 +1,7 @@
 use crate::state::{GameState, GameStateInterest};
 use crate::structure::inode::{InodeBlock, InodeBlockAllocator};
 use ipc::generated::{CommandType, Dimension};
-use ipc::{BodyType, CommandState};
+use ipc::{BodyType, CommandState, TargetEntity};
 use log::trace;
 use smallvec::{smallvec, SmallVec};
 use std::borrow::Cow;
@@ -35,6 +35,7 @@ struct StructureInner {
 #[derive(Hash, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum DynamicStateType {
     EntityIds = 0,
+    PlayerId,
 }
 
 // TODO 1 second
@@ -55,6 +56,7 @@ pub struct DynamicDirRegistrationer {
     /// (inode, name, entry, parent)
     entries: Vec<(u64, Cow<'static, str>, Entry, Option<u64>)>,
     inodes: InodeBlock,
+    parent: u64,
 }
 pub type DynamicDirFn = fn(&GameState, &mut DynamicDirRegistrationer);
 
@@ -103,6 +105,7 @@ pub enum FileBehaviour {
 }
 
 pub enum EntryAssociatedData {
+    PlayerId,
     EntityId(i32),
     World(Dimension),
 }
@@ -213,6 +216,8 @@ impl FilesystemStructure {
                 DynamicStateType::EntityIds => {
                     interest.entities_by_id = true;
                 }
+
+                DynamicStateType::PlayerId => {}
             }
         }
 
@@ -244,6 +249,7 @@ impl FilesystemStructure {
             let mut registrationer = DynamicDirRegistrationer {
                 inodes: self.inner.inode_alloc.allocate(),
                 entries: Vec::new(),
+                parent: *inode,
             };
 
             (dyn_fn)(state, &mut registrationer);
@@ -470,7 +476,10 @@ impl EntryAssociatedData {
     fn apply_to_state(&self, state: &mut CommandState) {
         match self {
             EntryAssociatedData::EntityId(id) if state.target_entity.is_none() => {
-                state.target_entity = Some(*id)
+                state.target_entity = Some(TargetEntity::Entity(*id))
+            }
+            EntryAssociatedData::PlayerId if state.target_entity.is_none() => {
+                state.target_entity = Some(TargetEntity::Player)
             }
             EntryAssociatedData::World(dim) if state.target_world.is_none() => {
                 state.target_world = Some(*dim)
@@ -544,21 +553,25 @@ impl DynamicDirRegistrationer {
         name: impl Into<Cow<'static, str>>,
         entry: impl Into<Entry>,
     ) -> u64 {
-        self.add_entry(None, name.into(), entry.into())
+        self.add_entry_raw(None, name.into(), entry.into())
     }
 
-    pub fn add_static_entry(
+    pub fn add_entry(
         &mut self,
         parent: u64,
         name: impl Into<Cow<'static, str>>,
         entry: impl Into<Entry>,
     ) -> u64 {
-        self.add_entry(Some(parent), name.into(), entry.into())
+        self.add_entry_raw(Some(parent), name.into(), entry.into())
     }
 
-    fn add_entry(&mut self, parent: Option<u64>, name: Cow<'static, str>, entry: Entry) -> u64 {
+    fn add_entry_raw(&mut self, parent: Option<u64>, name: Cow<'static, str>, entry: Entry) -> u64 {
         let inode = self.inodes.next().expect("exhausted dynamic inodes"); // TODO allocate more
         self.entries.push((inode, name, entry, parent));
         inode
+    }
+
+    pub fn parent(&self) -> u64 {
+        self.parent
     }
 }

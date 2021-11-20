@@ -1,6 +1,6 @@
 use std::io::{ErrorKind, Read, Write};
 
-use crate::command::{Body, BodyType, CommandState};
+use crate::command::{Body, BodyType, CommandState, TargetEntity};
 use crate::generated::{
     CommandArgs, CommandType, Error, GameRequest, GameRequestArgs, GameRequestBody, GameResponse,
     GameResponseBody, StateRequest, StateRequestArgs, StateResponse, Vec3, WriteBody,
@@ -149,7 +149,7 @@ impl IpcChannel {
                     Body::Integer(val) => int = Some(val),
                     Body::Float(val) => float = Some(val),
                     Body::String(val) => string = Some(buf.create_string(&val)),
-                    Body::Position { x, y, z } => pos = Some(Vec3::new(x, y, z)),
+                    Body::Vec { x, y, z } => pos = Some(Vec3::new(x, y, z)),
                 }
                 WriteBody::create(
                     &mut buf,
@@ -157,16 +157,23 @@ impl IpcChannel {
                         float,
                         int,
                         string,
-                        pos: pos.as_ref(),
+                        vec: pos.as_ref(),
                     },
                 )
             });
+
+            let (target_entity, target_player_entity) = match state.target_entity {
+                Some(TargetEntity::Entity(id)) => (Some(id), false),
+                Some(TargetEntity::Player) => (None, true),
+                None => (None, false),
+            };
 
             Command::create(
                 &mut buf,
                 &CommandArgs {
                     cmd,
-                    target_entity: state.target_entity,
+                    target_entity,
+                    target_player_entity,
                     target_world: state.target_world,
                     write: write_body,
                 },
@@ -211,12 +218,12 @@ impl IpcChannel {
                     response.float(),
                     response.int(),
                     response.string(),
-                    response.pos(),
+                    response.vec(),
                 ) {
                     (Float, Some(val), None, None, None) => Body::Float(val),
                     (Integer, None, Some(val), None, None) => Body::Integer(val),
                     (String, None, None, Some(val), None) => Body::String(val.into()),
-                    (Position, None, None, None, Some(val)) => Body::Position {
+                    (Position, None, None, None, Some(val)) => Body::Vec {
                         x: val.x(),
                         y: val.y(),
                         z: val.z(),

@@ -15,7 +15,7 @@ table Response {
 	float:float = null;
 	int:int = null;
 	string:string;
-	pos:Vec3;
+	vec:Vec3;
 }
 
 table StateResponse {

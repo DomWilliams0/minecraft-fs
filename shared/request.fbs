@@ -8,6 +8,10 @@ enum CommandType:int32 {
 	EntityHealth,
 
 	WorldTime,
+
+	ControlSay,
+	ControlJump,
+	ControlMove,
 }
 
 
@@ -21,6 +25,8 @@ table WriteBody {
 table Command {
     cmd:CommandType;
     target_entity:int32 = null;
+    // if target_entity is null but this is true, use the player entity
+    target_player_entity:bool = false;
     target_world:Dimension = null;
 
     // if null, command is a read

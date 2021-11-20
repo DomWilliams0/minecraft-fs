@@ -4,6 +4,7 @@ import MCFS.*
 import com.google.flatbuffers.FlatBufferBuilder
 import ms.domwillia.mcfs.MinecraftFsMod
 import net.minecraft.client.MinecraftClient
+import net.minecraft.client.network.ClientPlayerEntity
 import net.minecraft.entity.Entity
 import net.minecraft.entity.LivingEntity
 import net.minecraft.entity.damage.DamageSource
@@ -27,7 +28,7 @@ class InvalidTypeForWriteException : Exception()
 class Executor(private val responseBuilder: FlatBufferBuilder) {
 
     fun execute(request: GameRequest): ByteBuffer? {
-        responseBuilder.clear();
+        responseBuilder.clear()
 
         val gameResp = when (request.bodyType) {
             GameRequestBody.Command -> {
@@ -108,6 +109,22 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                     world.timeOfDay = value.toLong()
                 }
             }
+
+            CommandType.ControlSay -> {
+                val value = command.woString()
+                val player = MinecraftClient.getInstance().player ?: throw NoGameException()
+                player.sendChatMessage(value)
+            }
+
+            CommandType.ControlJump -> {
+                theClientPlayer.jump()
+            }
+
+            CommandType.ControlMove -> {
+                val vec = command.woVec()
+                theClientPlayer.travel(vec)
+            }
+
             else -> {
                 MinecraftFsMod.LOGGER.warn("Unknown command '$command'")
                 mkError(Error.UnknownCommand)
@@ -120,22 +137,22 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
 
         // null if not in game
         val server = theServerOpt
-        val player = server?.thePlayer
+        val player = server?.thePlayerOpt
         val world = req.targetWorld?.let(this::resolveWorld)
 
         val entityIds = if (world != null && req.entitiesById) {
-            val bounds = -10_000.0;
+            val bounds = -10_000.0
             val box = Box(Vec3d(-bounds, -bounds, -bounds), Vec3d(bounds, bounds, bounds))
-            val entities = world.getOtherEntities(null, box);
+            val entities = world.getOtherEntities(null, box)
 
             StateResponse.createEntityIdsVector(responseBuilder, entities.map { e -> e.id }.toIntArray())
         } else {
             null
         }
 
-        StateResponse.startStateResponse(responseBuilder);
+        StateResponse.startStateResponse(responseBuilder)
         if (player != null) {
-            StateResponse.addPlayerEntityId(responseBuilder, player.id);
+            StateResponse.addPlayerEntityId(responseBuilder, player.id)
             StateResponse.addPlayerWorld(
                 responseBuilder, when (player.world.registryKey) {
                     World.OVERWORLD -> Dimension.Overworld
@@ -149,7 +166,7 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
         if (entityIds != null) {
             StateResponse.addEntityIds(responseBuilder, entityIds)
         }
-        return StateResponse.endStateResponse(responseBuilder);
+        return StateResponse.endStateResponse(responseBuilder)
     }
 
     private val theServerOpt: MinecraftServer?
@@ -158,9 +175,14 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
     private val theServer: MinecraftServer
         get() = theServerOpt ?: throw NoGameException()
 
-    private val MinecraftServer.thePlayer: ServerPlayerEntity?
+    private val MinecraftServer.thePlayerOpt: ServerPlayerEntity?
         get() = playerManager?.getPlayer(MinecraftClient.getInstance().session.username)
 
+    private val MinecraftServer.thePlayer: ServerPlayerEntity
+        get() = thePlayerOpt ?: throw NoGameException()
+
+    private val theClientPlayer: ClientPlayerEntity
+        get() = MinecraftClient.getInstance().player ?: throw NoGameException()
 
     private fun mkError(err: Int): Int {
         Response.startResponse(responseBuilder)
@@ -190,14 +212,20 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
     private fun mkPosition(pos: Vec3d): Int {
         val v = Vec3.createVec3(responseBuilder, pos.x, pos.y, pos.z)
         Response.startResponse(responseBuilder)
-        Response.addPos(responseBuilder, v)
+        Response.addVec(responseBuilder, v)
         return Response.endResponse(responseBuilder)
     }
 
     private fun getTargetEntity(command: Command): Entity {
-        val id = command.targetEntity ?: throw MissingTargetException();
-        val world = getTargetWorld(command)
-        return world.getEntityById(id) ?: throw UnknownEntityException(id)
+        val id = command.targetEntity
+        return if (id != null) {
+            val world = getTargetWorld(command)
+            world.getEntityById(id) ?: throw UnknownEntityException(id)
+        } else if (command.targetPlayerEntity) {
+            theServer.thePlayer
+        } else {
+            throw MissingTargetException()
+        }
     }
 
     private fun getTargetLivingEntity(command: Command): LivingEntity {
@@ -210,7 +238,7 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
     }
 
     private fun resolveWorld(dim: UByte): ServerWorld? {
-        val server = theServer;
+        val server = theServer
         return when (dim) {
             Dimension.Overworld -> server.getWorld(World.OVERWORLD)
             Dimension.Nether -> server.getWorld(World.NETHER)
@@ -225,7 +253,7 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
     }
 
     private fun Command.rwFloat(): Float? {
-        val writeBody = this.write;
+        val writeBody = this.write
         return if (writeBody != null) {
             writeBody.float ?: throw InvalidTypeForWriteException()
         } else {
@@ -234,7 +262,7 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
     }
 
     private fun Command.rwInt(): Int? {
-        val writeBody = this.write;
+        val writeBody = this.write
         return if (writeBody != null) {
             writeBody.int ?: throw InvalidTypeForWriteException()
         } else {
@@ -243,12 +271,23 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
     }
 
     private fun Command.rwPos(): Vec3d? {
-        val writeBody = this.write;
+        val writeBody = this.write
         return if (writeBody != null) {
-            val vec = writeBody.pos ?: throw InvalidTypeForWriteException()
+            val vec = writeBody.vec ?: throw InvalidTypeForWriteException()
             Vec3d(vec.x, vec.y, vec.z)
         } else {
             null
         }
+    }
+
+    private fun Command.woString(): String {
+        val writeBody = this.write ?: throw UnsupportedOperationException()
+        return writeBody.string ?: throw InvalidTypeForWriteException()
+    }
+
+    private fun Command.woVec(): Vec3d {
+        val writeBody = this.write ?: throw UnsupportedOperationException()
+        val vec = writeBody.vec ?: throw InvalidTypeForWriteException()
+        return Vec3d(vec.x, vec.y, vec.z)
     }
 }

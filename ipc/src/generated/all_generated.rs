@@ -118,18 +118,21 @@ pub mod mcfs {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_COMMAND_TYPE: i32 = 4;
+    pub const ENUM_MAX_COMMAND_TYPE: i32 = 7;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 5] = [
+    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 8] = [
         CommandType::PlayerName,
         CommandType::EntityType,
         CommandType::EntityPosition,
         CommandType::EntityHealth,
         CommandType::WorldTime,
+        CommandType::ControlSay,
+        CommandType::ControlJump,
+        CommandType::ControlMove,
     ];
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -142,15 +145,21 @@ pub mod mcfs {
         pub const EntityPosition: Self = Self(2);
         pub const EntityHealth: Self = Self(3);
         pub const WorldTime: Self = Self(4);
+        pub const ControlSay: Self = Self(5);
+        pub const ControlJump: Self = Self(6);
+        pub const ControlMove: Self = Self(7);
 
         pub const ENUM_MIN: i32 = 0;
-        pub const ENUM_MAX: i32 = 4;
+        pub const ENUM_MAX: i32 = 7;
         pub const ENUM_VALUES: &'static [Self] = &[
             Self::PlayerName,
             Self::EntityType,
             Self::EntityPosition,
             Self::EntityHealth,
             Self::WorldTime,
+            Self::ControlSay,
+            Self::ControlJump,
+            Self::ControlMove,
         ];
         /// Returns the variant's name or "" if unknown.
         pub fn variant_name(self) -> Option<&'static str> {
@@ -160,6 +169,9 @@ pub mod mcfs {
                 Self::EntityPosition => Some("EntityPosition"),
                 Self::EntityHealth => Some("EntityHealth"),
                 Self::WorldTime => Some("WorldTime"),
+                Self::ControlSay => Some("ControlSay"),
+                Self::ControlJump => Some("ControlJump"),
+                Self::ControlMove => Some("ControlMove"),
                 _ => None,
             }
         }
@@ -865,13 +877,15 @@ pub mod mcfs {
             if let Some(x) = args.target_world {
                 builder.add_target_world(x);
             }
+            builder.add_target_player_entity(args.target_player_entity);
             builder.finish()
         }
 
         pub const VT_CMD: flatbuffers::VOffsetT = 4;
         pub const VT_TARGET_ENTITY: flatbuffers::VOffsetT = 6;
-        pub const VT_TARGET_WORLD: flatbuffers::VOffsetT = 8;
-        pub const VT_WRITE: flatbuffers::VOffsetT = 10;
+        pub const VT_TARGET_PLAYER_ENTITY: flatbuffers::VOffsetT = 8;
+        pub const VT_TARGET_WORLD: flatbuffers::VOffsetT = 10;
+        pub const VT_WRITE: flatbuffers::VOffsetT = 12;
 
         #[inline]
         pub fn cmd(&self) -> CommandType {
@@ -882,6 +896,12 @@ pub mod mcfs {
         #[inline]
         pub fn target_entity(&self) -> Option<i32> {
             self._tab.get::<i32>(Command::VT_TARGET_ENTITY, None)
+        }
+        #[inline]
+        pub fn target_player_entity(&self) -> bool {
+            self._tab
+                .get::<bool>(Command::VT_TARGET_PLAYER_ENTITY, Some(false))
+                .unwrap()
         }
         #[inline]
         pub fn target_world(&self) -> Option<Dimension> {
@@ -904,6 +924,11 @@ pub mod mcfs {
             v.visit_table(pos)?
                 .visit_field::<CommandType>(&"cmd", Self::VT_CMD, false)?
                 .visit_field::<i32>(&"target_entity", Self::VT_TARGET_ENTITY, false)?
+                .visit_field::<bool>(
+                    &"target_player_entity",
+                    Self::VT_TARGET_PLAYER_ENTITY,
+                    false,
+                )?
                 .visit_field::<Dimension>(&"target_world", Self::VT_TARGET_WORLD, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<WriteBody>>(
                     &"write",
@@ -917,6 +942,7 @@ pub mod mcfs {
     pub struct CommandArgs<'a> {
         pub cmd: CommandType,
         pub target_entity: Option<i32>,
+        pub target_player_entity: bool,
         pub target_world: Option<Dimension>,
         pub write: Option<flatbuffers::WIPOffset<WriteBody<'a>>>,
     }
@@ -926,6 +952,7 @@ pub mod mcfs {
             CommandArgs {
                 cmd: CommandType::PlayerName,
                 target_entity: None,
+                target_player_entity: false,
                 target_world: None,
                 write: None,
             }
@@ -945,6 +972,14 @@ pub mod mcfs {
         pub fn add_target_entity(&mut self, target_entity: i32) {
             self.fbb_
                 .push_slot_always::<i32>(Command::VT_TARGET_ENTITY, target_entity);
+        }
+        #[inline]
+        pub fn add_target_player_entity(&mut self, target_player_entity: bool) {
+            self.fbb_.push_slot::<bool>(
+                Command::VT_TARGET_PLAYER_ENTITY,
+                target_player_entity,
+                false,
+            );
         }
         #[inline]
         pub fn add_target_world(&mut self, target_world: Dimension) {
@@ -976,6 +1011,7 @@ pub mod mcfs {
             let mut ds = f.debug_struct("Command");
             ds.field("cmd", &self.cmd());
             ds.field("target_entity", &self.target_entity());
+            ds.field("target_player_entity", &self.target_player_entity());
             ds.field("target_world", &self.target_world());
             ds.field("write", &self.write());
             ds.finish()
@@ -1315,8 +1351,8 @@ pub mod mcfs {
             args: &'args ResponseArgs<'args>,
         ) -> flatbuffers::WIPOffset<Response<'bldr>> {
             let mut builder = ResponseBuilder::new(_fbb);
-            if let Some(x) = args.pos {
-                builder.add_pos(x);
+            if let Some(x) = args.vec {
+                builder.add_vec(x);
             }
             if let Some(x) = args.string {
                 builder.add_string(x);
@@ -1337,7 +1373,7 @@ pub mod mcfs {
         pub const VT_FLOAT: flatbuffers::VOffsetT = 6;
         pub const VT_INT: flatbuffers::VOffsetT = 8;
         pub const VT_STRING: flatbuffers::VOffsetT = 10;
-        pub const VT_POS: flatbuffers::VOffsetT = 12;
+        pub const VT_VEC: flatbuffers::VOffsetT = 12;
 
         #[inline]
         pub fn error(&self) -> Option<Error> {
@@ -1357,8 +1393,8 @@ pub mod mcfs {
                 .get::<flatbuffers::ForwardsUOffset<&str>>(Response::VT_STRING, None)
         }
         #[inline]
-        pub fn pos(&self) -> Option<&'a Vec3> {
-            self._tab.get::<Vec3>(Response::VT_POS, None)
+        pub fn vec(&self) -> Option<&'a Vec3> {
+            self._tab.get::<Vec3>(Response::VT_VEC, None)
         }
     }
 
@@ -1378,7 +1414,7 @@ pub mod mcfs {
                     Self::VT_STRING,
                     false,
                 )?
-                .visit_field::<Vec3>(&"pos", Self::VT_POS, false)?
+                .visit_field::<Vec3>(&"vec", Self::VT_VEC, false)?
                 .finish();
             Ok(())
         }
@@ -1388,7 +1424,7 @@ pub mod mcfs {
         pub float: Option<f32>,
         pub int: Option<i32>,
         pub string: Option<flatbuffers::WIPOffset<&'a str>>,
-        pub pos: Option<&'a Vec3>,
+        pub vec: Option<&'a Vec3>,
     }
     impl<'a> Default for ResponseArgs<'a> {
         #[inline]
@@ -1398,7 +1434,7 @@ pub mod mcfs {
                 float: None,
                 int: None,
                 string: None,
-                pos: None,
+                vec: None,
             }
         }
     }
@@ -1426,8 +1462,8 @@ pub mod mcfs {
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Response::VT_STRING, string);
         }
         #[inline]
-        pub fn add_pos(&mut self, pos: &Vec3) {
-            self.fbb_.push_slot_always::<&Vec3>(Response::VT_POS, pos);
+        pub fn add_vec(&mut self, vec: &Vec3) {
+            self.fbb_.push_slot_always::<&Vec3>(Response::VT_VEC, vec);
         }
         #[inline]
         pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> ResponseBuilder<'a, 'b> {
@@ -1451,7 +1487,7 @@ pub mod mcfs {
             ds.field("float", &self.float());
             ds.field("int", &self.int());
             ds.field("string", &self.string());
-            ds.field("pos", &self.pos());
+            ds.field("vec", &self.vec());
             ds.finish()
         }
     }
