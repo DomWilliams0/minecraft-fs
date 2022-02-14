@@ -705,6 +705,11 @@ pub mod mcfs {
     }
 
     impl<'a> WriteBody<'a> {
+        pub const VT_FLOAT: flatbuffers::VOffsetT = 4;
+        pub const VT_INT: flatbuffers::VOffsetT = 6;
+        pub const VT_STRING: flatbuffers::VOffsetT = 8;
+        pub const VT_VEC: flatbuffers::VOffsetT = 10;
+
         #[inline]
         pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
             WriteBody { _tab: table }
@@ -729,11 +734,6 @@ pub mod mcfs {
             }
             builder.finish()
         }
-
-        pub const VT_FLOAT: flatbuffers::VOffsetT = 4;
-        pub const VT_INT: flatbuffers::VOffsetT = 6;
-        pub const VT_STRING: flatbuffers::VOffsetT = 8;
-        pub const VT_VEC: flatbuffers::VOffsetT = 10;
 
         #[inline]
         pub fn float(&self) -> Option<f32> {
@@ -762,14 +762,14 @@ pub mod mcfs {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
-                .visit_field::<f32>(&"float", Self::VT_FLOAT, false)?
-                .visit_field::<i32>(&"int", Self::VT_INT, false)?
+                .visit_field::<f32>("float", Self::VT_FLOAT, false)?
+                .visit_field::<i32>("int", Self::VT_INT, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
-                    &"string",
+                    "string",
                     Self::VT_STRING,
                     false,
                 )?
-                .visit_field::<Vec3>(&"vec", Self::VT_VEC, false)?
+                .visit_field::<Vec3>("vec", Self::VT_VEC, false)?
                 .finish();
             Ok(())
         }
@@ -857,6 +857,12 @@ pub mod mcfs {
     }
 
     impl<'a> Command<'a> {
+        pub const VT_CMD: flatbuffers::VOffsetT = 4;
+        pub const VT_TARGET_ENTITY: flatbuffers::VOffsetT = 6;
+        pub const VT_TARGET_PLAYER_ENTITY: flatbuffers::VOffsetT = 8;
+        pub const VT_TARGET_WORLD: flatbuffers::VOffsetT = 10;
+        pub const VT_WRITE: flatbuffers::VOffsetT = 12;
+
         #[inline]
         pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
             Command { _tab: table }
@@ -880,12 +886,6 @@ pub mod mcfs {
             builder.add_target_player_entity(args.target_player_entity);
             builder.finish()
         }
-
-        pub const VT_CMD: flatbuffers::VOffsetT = 4;
-        pub const VT_TARGET_ENTITY: flatbuffers::VOffsetT = 6;
-        pub const VT_TARGET_PLAYER_ENTITY: flatbuffers::VOffsetT = 8;
-        pub const VT_TARGET_WORLD: flatbuffers::VOffsetT = 10;
-        pub const VT_WRITE: flatbuffers::VOffsetT = 12;
 
         #[inline]
         pub fn cmd(&self) -> CommandType {
@@ -922,16 +922,12 @@ pub mod mcfs {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
-                .visit_field::<CommandType>(&"cmd", Self::VT_CMD, false)?
-                .visit_field::<i32>(&"target_entity", Self::VT_TARGET_ENTITY, false)?
-                .visit_field::<bool>(
-                    &"target_player_entity",
-                    Self::VT_TARGET_PLAYER_ENTITY,
-                    false,
-                )?
-                .visit_field::<Dimension>(&"target_world", Self::VT_TARGET_WORLD, false)?
+                .visit_field::<CommandType>("cmd", Self::VT_CMD, false)?
+                .visit_field::<i32>("target_entity", Self::VT_TARGET_ENTITY, false)?
+                .visit_field::<bool>("target_player_entity", Self::VT_TARGET_PLAYER_ENTITY, false)?
+                .visit_field::<Dimension>("target_world", Self::VT_TARGET_WORLD, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<WriteBody>>(
-                    &"write",
+                    "write",
                     Self::VT_WRITE,
                     false,
                 )?
@@ -1035,6 +1031,9 @@ pub mod mcfs {
     }
 
     impl<'a> StateRequest<'a> {
+        pub const VT_ENTITIES_BY_ID: flatbuffers::VOffsetT = 4;
+        pub const VT_TARGET_WORLD: flatbuffers::VOffsetT = 6;
+
         #[inline]
         pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
             StateRequest { _tab: table }
@@ -1051,9 +1050,6 @@ pub mod mcfs {
             builder.add_entities_by_id(args.entities_by_id);
             builder.finish()
         }
-
-        pub const VT_ENTITIES_BY_ID: flatbuffers::VOffsetT = 4;
-        pub const VT_TARGET_WORLD: flatbuffers::VOffsetT = 6;
 
         #[inline]
         pub fn entities_by_id(&self) -> bool {
@@ -1076,8 +1072,8 @@ pub mod mcfs {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
-                .visit_field::<bool>(&"entities_by_id", Self::VT_ENTITIES_BY_ID, false)?
-                .visit_field::<Dimension>(&"target_world", Self::VT_TARGET_WORLD, false)?
+                .visit_field::<bool>("entities_by_id", Self::VT_ENTITIES_BY_ID, false)?
+                .visit_field::<Dimension>("target_world", Self::VT_TARGET_WORLD, false)?
                 .finish();
             Ok(())
         }
@@ -1153,6 +1149,9 @@ pub mod mcfs {
     }
 
     impl<'a> GameRequest<'a> {
+        pub const VT_BODY_TYPE: flatbuffers::VOffsetT = 4;
+        pub const VT_BODY: flatbuffers::VOffsetT = 6;
+
         #[inline]
         pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
             GameRequest { _tab: table }
@@ -1169,9 +1168,6 @@ pub mod mcfs {
             builder.add_body_type(args.body_type);
             builder.finish()
         }
-
-        pub const VT_BODY_TYPE: flatbuffers::VOffsetT = 4;
-        pub const VT_BODY: flatbuffers::VOffsetT = 6;
 
         #[inline]
         pub fn body_type(&self) -> GameRequestBody {
@@ -1220,9 +1216,9 @@ pub mod mcfs {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
                 .visit_union::<GameRequestBody, _>(
-                    &"body_type",
+                    "body_type",
                     Self::VT_BODY_TYPE,
-                    &"body",
+                    "body",
                     Self::VT_BODY,
                     true,
                     |key, v, pos| match key {
@@ -1341,6 +1337,12 @@ pub mod mcfs {
     }
 
     impl<'a> Response<'a> {
+        pub const VT_ERROR: flatbuffers::VOffsetT = 4;
+        pub const VT_FLOAT: flatbuffers::VOffsetT = 6;
+        pub const VT_INT: flatbuffers::VOffsetT = 8;
+        pub const VT_STRING: flatbuffers::VOffsetT = 10;
+        pub const VT_VEC: flatbuffers::VOffsetT = 12;
+
         #[inline]
         pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
             Response { _tab: table }
@@ -1368,12 +1370,6 @@ pub mod mcfs {
             }
             builder.finish()
         }
-
-        pub const VT_ERROR: flatbuffers::VOffsetT = 4;
-        pub const VT_FLOAT: flatbuffers::VOffsetT = 6;
-        pub const VT_INT: flatbuffers::VOffsetT = 8;
-        pub const VT_STRING: flatbuffers::VOffsetT = 10;
-        pub const VT_VEC: flatbuffers::VOffsetT = 12;
 
         #[inline]
         pub fn error(&self) -> Option<Error> {
@@ -1406,15 +1402,15 @@ pub mod mcfs {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
-                .visit_field::<Error>(&"error", Self::VT_ERROR, false)?
-                .visit_field::<f32>(&"float", Self::VT_FLOAT, false)?
-                .visit_field::<i32>(&"int", Self::VT_INT, false)?
+                .visit_field::<Error>("error", Self::VT_ERROR, false)?
+                .visit_field::<f32>("float", Self::VT_FLOAT, false)?
+                .visit_field::<i32>("int", Self::VT_INT, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
-                    &"string",
+                    "string",
                     Self::VT_STRING,
                     false,
                 )?
-                .visit_field::<Vec3>(&"vec", Self::VT_VEC, false)?
+                .visit_field::<Vec3>("vec", Self::VT_VEC, false)?
                 .finish();
             Ok(())
         }
@@ -1509,6 +1505,10 @@ pub mod mcfs {
     }
 
     impl<'a> StateResponse<'a> {
+        pub const VT_PLAYER_ENTITY_ID: flatbuffers::VOffsetT = 4;
+        pub const VT_PLAYER_WORLD: flatbuffers::VOffsetT = 6;
+        pub const VT_ENTITY_IDS: flatbuffers::VOffsetT = 8;
+
         #[inline]
         pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
             StateResponse { _tab: table }
@@ -1530,10 +1530,6 @@ pub mod mcfs {
             }
             builder.finish()
         }
-
-        pub const VT_PLAYER_ENTITY_ID: flatbuffers::VOffsetT = 4;
-        pub const VT_PLAYER_WORLD: flatbuffers::VOffsetT = 6;
-        pub const VT_ENTITY_IDS: flatbuffers::VOffsetT = 8;
 
         #[inline]
         pub fn player_entity_id(&self) -> Option<i32> {
@@ -1563,10 +1559,10 @@ pub mod mcfs {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
-                .visit_field::<i32>(&"player_entity_id", Self::VT_PLAYER_ENTITY_ID, false)?
-                .visit_field::<Dimension>(&"player_world", Self::VT_PLAYER_WORLD, false)?
+                .visit_field::<i32>("player_entity_id", Self::VT_PLAYER_ENTITY_ID, false)?
+                .visit_field::<Dimension>("player_world", Self::VT_PLAYER_WORLD, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, i32>>>(
-                    &"entity_ids",
+                    "entity_ids",
                     Self::VT_ENTITY_IDS,
                     false,
                 )?
@@ -1658,6 +1654,9 @@ pub mod mcfs {
     }
 
     impl<'a> GameResponse<'a> {
+        pub const VT_BODY_TYPE: flatbuffers::VOffsetT = 4;
+        pub const VT_BODY: flatbuffers::VOffsetT = 6;
+
         #[inline]
         pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
             GameResponse { _tab: table }
@@ -1674,9 +1673,6 @@ pub mod mcfs {
             builder.add_body_type(args.body_type);
             builder.finish()
         }
-
-        pub const VT_BODY_TYPE: flatbuffers::VOffsetT = 4;
-        pub const VT_BODY: flatbuffers::VOffsetT = 6;
 
         #[inline]
         pub fn body_type(&self) -> GameResponseBody {
@@ -1725,9 +1721,9 @@ pub mod mcfs {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
                 .visit_union::<GameResponseBody, _>(
-                    &"body_type",
+                    "body_type",
                     Self::VT_BODY_TYPE,
-                    &"body",
+                    "body",
                     Self::VT_BODY,
                     true,
                     |key, v, pos| match key {
