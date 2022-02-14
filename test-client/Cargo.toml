@@ -1,14 +1,13 @@
 [package]
-name = "ipc"
+name = "test-client"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-thiserror = "1.0"
-log = "0.4"
-flatbuffers = "2.0"
+ipc = { path = "../ipc", features = ["client"] }
 
-[features]
-client = []
+flatbuffers = "2.0"
+env_logger = "0.9"
+log = "0.4"

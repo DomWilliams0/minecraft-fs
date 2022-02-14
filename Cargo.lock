@@ -372,6 +372,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-client"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "flatbuffers",
+ "ipc",
+ "log",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"

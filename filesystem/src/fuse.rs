@@ -4,9 +4,8 @@ use std::fmt::Write;
 use std::time::{Duration, SystemTime};
 
 use fuser::{
-    FileAttr, FileType, ReplyAttr, ReplyData, ReplyDirectory, ReplyDirectoryPlus, ReplyEmpty,
-    ReplyEntry, ReplyIoctl, ReplyLock, ReplyLseek, ReplyOpen, ReplyStatfs, ReplyWrite, ReplyXattr,
-    Request, TimeOrNow,
+    FileAttr, FileType, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, ReplyIoctl, ReplyLock,
+    ReplyLseek, ReplyOpen, ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
 };
 use log::*;
 
@@ -288,6 +287,7 @@ fn ipc_error_code(err: &IpcError) -> i32 {
         IpcError::UnexpectedGameResponse(_)
         | IpcError::UnexpectedResponse(_)
         | IpcError::BadData(_) => libc::EINVAL,
+        _ => libc::EINVAL,
     }
 }
 

@@ -1,4 +1,9 @@
 use std::io::{ErrorKind, Read, Write};
+use std::os::unix::net::UnixStream;
+use std::path::{Path, PathBuf};
+
+use flatbuffers::{root, FlatBufferBuilder, InvalidFlatbuffer};
+use thiserror::Error;
 
 use crate::command::{Body, BodyType, CommandState, TargetEntity};
 use crate::generated::{
@@ -6,11 +11,6 @@ use crate::generated::{
     GameResponseBody, StateRequest, StateRequestArgs, StateResponse, Vec3, WriteBody,
     WriteBodyArgs,
 };
-
-use flatbuffers::{root, FlatBufferBuilder, InvalidFlatbuffer};
-use std::os::unix::net::UnixStream;
-use std::path::{Path, PathBuf};
-use thiserror::Error;
 
 const RETRIES: u8 = 2;
 
@@ -28,6 +28,10 @@ pub enum IpcError {
 
     #[error("IO error connecting to socket: {0}")]
     Connecting(#[source] std::io::Error),
+
+    #[cfg(feature = "client")]
+    #[error("IO error binding to socket: {0}")]
+    Binding(#[source] std::io::Error),
 
     #[error("IO error writing to socket: {0}")]
     Sending(#[source] std::io::Error),
@@ -288,6 +292,100 @@ impl IpcChannel {
                     self.sock = Self::open_socket(&self.sock_path)?;
                 }
             }
+        }
+    }
+}
+
+#[cfg(feature = "client")]
+pub mod recv {
+    use std::io::{Read, Write};
+    use std::os::unix::net::{UnixListener, UnixStream};
+
+    use flatbuffers::root;
+    use log::*;
+
+    use crate::generated::GameRequest;
+    use crate::IpcError;
+
+    /// Fake game client to the fuse server
+    pub struct IpcClient {
+        server: UnixListener,
+    }
+
+    pub struct ConnectedIpcClient {
+        sock: UnixStream,
+        recv_buffer: Vec<u8>,
+    }
+
+    impl IpcClient {
+        pub fn bind() -> Result<Self, IpcError> {
+            let path = {
+                let user = std::env::var("USER").unwrap_or_else(|_| "user".to_owned());
+                let mut path = std::env::temp_dir();
+                path.push(format!("minecraft-fuse-{}", user));
+                path
+            };
+
+            if path.exists() {
+                if let Err(err) = std::fs::remove_file(&path) {
+                    error!(
+                        "failed to delete existing socket {}: {}",
+                        path.display(),
+                        err
+                    )
+                } else {
+                    info!("deleted existing socket {}", path.display());
+                }
+            }
+
+            info!("binding to socket {}", path.display());
+            let server = UnixListener::bind(&path).map_err(IpcError::Binding)?;
+
+            Ok(Self { server })
+        }
+
+        pub fn accept(&mut self) -> Result<ConnectedIpcClient, std::io::Error> {
+            self.server.accept().map(|(s, _)| ConnectedIpcClient {
+                sock: s,
+                recv_buffer: vec![],
+            })
+        }
+    }
+
+    impl ConnectedIpcClient {
+        pub fn recv(&mut self) -> Result<GameRequest, IpcError> {
+            let mut len_bytes = [0u8; 4];
+            self.sock
+                .read_exact(&mut len_bytes)
+                .map_err(IpcError::Receiving)?;
+            let len = u32::from_le_bytes(len_bytes) as usize;
+            debug!("recv'ing message of {} bytes", len);
+
+            self.recv_buffer.truncate(0);
+            self.recv_buffer.reserve_exact(len);
+
+            {
+                let dst_slice =
+                    unsafe { std::slice::from_raw_parts_mut(self.recv_buffer.as_mut_ptr(), len) };
+
+                self.sock
+                    .read_exact(dst_slice)
+                    .map_err(IpcError::Receiving)?;
+
+                unsafe { self.recv_buffer.set_len(len) }
+            }
+
+            let req = root::<GameRequest>(&self.recv_buffer)?;
+            Ok(req)
+        }
+
+        pub fn send_response(&mut self, response: &[u8]) -> Result<(), IpcError> {
+            let len = response.len() as u32;
+            log::trace!("sending {} bytes on socket", len);
+            self.sock
+                .write_all(&len.to_le_bytes())
+                .map_err(IpcError::Sending)?;
+            self.sock.write_all(response).map_err(IpcError::Sending)
         }
     }
 }

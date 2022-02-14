@@ -1,5 +1,5 @@
 [workspace]
 
 members = [
-    "mcfuse", "filesystem", "ipc",
+    "mcfuse", "filesystem", "ipc", "test-client",
 ]
