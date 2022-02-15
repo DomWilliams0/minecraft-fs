@@ -346,18 +346,19 @@ pub mod mcfs {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_ERROR: i32 = 4;
+    pub const ENUM_MAX_ERROR: i32 = 5;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_ERROR: [Error; 5] = [
+    pub const ENUM_VALUES_ERROR: [Error; 6] = [
         Error::Unknown,
         Error::UnknownCommand,
         Error::NoGame,
         Error::MalformedRequest,
         Error::NoSuchEntity,
+        Error::NoSuchBlock,
     ];
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -370,15 +371,17 @@ pub mod mcfs {
         pub const NoGame: Self = Self(2);
         pub const MalformedRequest: Self = Self(3);
         pub const NoSuchEntity: Self = Self(4);
+        pub const NoSuchBlock: Self = Self(5);
 
         pub const ENUM_MIN: i32 = 0;
-        pub const ENUM_MAX: i32 = 4;
+        pub const ENUM_MAX: i32 = 5;
         pub const ENUM_VALUES: &'static [Self] = &[
             Self::Unknown,
             Self::UnknownCommand,
             Self::NoGame,
             Self::MalformedRequest,
             Self::NoSuchEntity,
+            Self::NoSuchBlock,
         ];
         /// Returns the variant's name or "" if unknown.
         pub fn variant_name(self) -> Option<&'static str> {
@@ -388,6 +391,7 @@ pub mod mcfs {
                 Self::NoGame => Some("NoGame"),
                 Self::MalformedRequest => Some("MalformedRequest"),
                 Self::NoSuchEntity => Some("NoSuchEntity"),
+                Self::NoSuchBlock => Some("NoSuchBlock"),
                 _ => None,
             }
         }
@@ -840,107 +844,6 @@ pub mod mcfs {
                     &x_le as *const i32 as *const u8,
                     self.0[8..].as_mut_ptr(),
                     core::mem::size_of::<i32>(),
-                );
-            }
-        }
-    }
-
-    // struct BlockDetails, aligned to 1
-    #[repr(transparent)]
-    #[derive(Clone, Copy, PartialEq)]
-    pub struct BlockDetails(pub [u8; 1]);
-    impl Default for BlockDetails {
-        fn default() -> Self {
-            Self([0; 1])
-        }
-    }
-    impl std::fmt::Debug for BlockDetails {
-        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            f.debug_struct("BlockDetails")
-                .field("has_color", &self.has_color())
-                .finish()
-        }
-    }
-
-    impl flatbuffers::SimpleToVerifyInSlice for BlockDetails {}
-    impl flatbuffers::SafeSliceAccess for BlockDetails {}
-    impl<'a> flatbuffers::Follow<'a> for BlockDetails {
-        type Inner = &'a BlockDetails;
-        #[inline]
-        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            <&'a BlockDetails>::follow(buf, loc)
-        }
-    }
-    impl<'a> flatbuffers::Follow<'a> for &'a BlockDetails {
-        type Inner = &'a BlockDetails;
-        #[inline]
-        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            flatbuffers::follow_cast_ref::<BlockDetails>(buf, loc)
-        }
-    }
-    impl<'b> flatbuffers::Push for BlockDetails {
-        type Output = BlockDetails;
-        #[inline]
-        fn push(&self, dst: &mut [u8], _rest: &[u8]) {
-            let src = unsafe {
-                ::std::slice::from_raw_parts(self as *const BlockDetails as *const u8, Self::size())
-            };
-            dst.copy_from_slice(src);
-        }
-    }
-    impl<'b> flatbuffers::Push for &'b BlockDetails {
-        type Output = BlockDetails;
-
-        #[inline]
-        fn push(&self, dst: &mut [u8], _rest: &[u8]) {
-            let src = unsafe {
-                ::std::slice::from_raw_parts(
-                    *self as *const BlockDetails as *const u8,
-                    Self::size(),
-                )
-            };
-            dst.copy_from_slice(src);
-        }
-    }
-
-    impl<'a> flatbuffers::Verifiable for BlockDetails {
-        #[inline]
-        fn run_verifier(
-            v: &mut flatbuffers::Verifier,
-            pos: usize,
-        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
-            use self::flatbuffers::Verifiable;
-            v.in_buffer::<Self>(pos)
-        }
-    }
-    impl<'a> BlockDetails {
-        #[allow(clippy::too_many_arguments)]
-        pub fn new(has_color: bool) -> Self {
-            let mut s = Self([0; 1]);
-            s.set_has_color(has_color);
-            s
-        }
-
-        pub fn has_color(&self) -> bool {
-            let mut mem = core::mem::MaybeUninit::<bool>::uninit();
-            unsafe {
-                core::ptr::copy_nonoverlapping(
-                    self.0[0..].as_ptr(),
-                    mem.as_mut_ptr() as *mut u8,
-                    core::mem::size_of::<bool>(),
-                );
-                mem.assume_init()
-            }
-            .from_little_endian()
-        }
-
-        pub fn set_has_color(&mut self, x: bool) {
-            let x_le = x.to_little_endian();
-            unsafe {
-                core::ptr::copy_nonoverlapping(
-                    &x_le as *const bool as *const u8,
-                    self.0[0..].as_mut_ptr(),
-                    core::mem::size_of::<bool>(),
                 );
             }
         }
@@ -1865,8 +1768,9 @@ pub mod mcfs {
                 )
         }
         #[inline]
-        pub fn block(&self) -> Option<&'a BlockDetails> {
-            self._tab.get::<BlockDetails>(StateResponse::VT_BLOCK, None)
+        pub fn block(&self) -> Option<BlockDetails<'a>> {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<BlockDetails>>(StateResponse::VT_BLOCK, None)
         }
     }
 
@@ -1885,7 +1789,11 @@ pub mod mcfs {
                     Self::VT_ENTITY_IDS,
                     false,
                 )?
-                .visit_field::<BlockDetails>("block", Self::VT_BLOCK, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<BlockDetails>>(
+                    "block",
+                    Self::VT_BLOCK,
+                    false,
+                )?
                 .finish();
             Ok(())
         }
@@ -1894,7 +1802,7 @@ pub mod mcfs {
         pub player_entity_id: Option<i32>,
         pub player_world: Option<Dimension>,
         pub entity_ids: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, i32>>>,
-        pub block: Option<&'a BlockDetails>,
+        pub block: Option<flatbuffers::WIPOffset<BlockDetails<'a>>>,
     }
     impl<'a> Default for StateResponseArgs<'a> {
         #[inline]
@@ -1933,9 +1841,12 @@ pub mod mcfs {
             );
         }
         #[inline]
-        pub fn add_block(&mut self, block: &BlockDetails) {
+        pub fn add_block(&mut self, block: flatbuffers::WIPOffset<BlockDetails<'b>>) {
             self.fbb_
-                .push_slot_always::<&BlockDetails>(StateResponse::VT_BLOCK, block);
+                .push_slot_always::<flatbuffers::WIPOffset<BlockDetails>>(
+                    StateResponse::VT_BLOCK,
+                    block,
+                );
         }
         #[inline]
         pub fn new(
@@ -1961,6 +1872,104 @@ pub mod mcfs {
             ds.field("player_world", &self.player_world());
             ds.field("entity_ids", &self.entity_ids());
             ds.field("block", &self.block());
+            ds.finish()
+        }
+    }
+    pub enum BlockDetailsOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct BlockDetails<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for BlockDetails<'a> {
+        type Inner = BlockDetails<'a>;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table { buf, loc },
+            }
+        }
+    }
+
+    impl<'a> BlockDetails<'a> {
+        pub const VT_HAS_COLOR: flatbuffers::VOffsetT = 4;
+
+        #[inline]
+        pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            BlockDetails { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args BlockDetailsArgs,
+        ) -> flatbuffers::WIPOffset<BlockDetails<'bldr>> {
+            let mut builder = BlockDetailsBuilder::new(_fbb);
+            builder.add_has_color(args.has_color);
+            builder.finish()
+        }
+
+        #[inline]
+        pub fn has_color(&self) -> bool {
+            self._tab
+                .get::<bool>(BlockDetails::VT_HAS_COLOR, Some(false))
+                .unwrap()
+        }
+    }
+
+    impl flatbuffers::Verifiable for BlockDetails<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<bool>("has_color", Self::VT_HAS_COLOR, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct BlockDetailsArgs {
+        pub has_color: bool,
+    }
+    impl<'a> Default for BlockDetailsArgs {
+        #[inline]
+        fn default() -> Self {
+            BlockDetailsArgs { has_color: false }
+        }
+    }
+    pub struct BlockDetailsBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> BlockDetailsBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_has_color(&mut self, has_color: bool) {
+            self.fbb_
+                .push_slot::<bool>(BlockDetails::VT_HAS_COLOR, has_color, false);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        ) -> BlockDetailsBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            BlockDetailsBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<BlockDetails<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl std::fmt::Debug for BlockDetails<'_> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let mut ds = f.debug_struct("BlockDetails");
+            ds.field("has_color", &self.has_color());
             ds.finish()
         }
     }

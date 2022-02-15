@@ -5,8 +5,9 @@ use flatbuffers::FlatBufferBuilder;
 use log::*;
 
 use ipc::generated::{
-    BlockDetails, Command, CommandType, Dimension, Error, GameResponse, GameResponseArgs,
-    GameResponseBody, Response, ResponseArgs, StateResponse, StateResponseArgs, Vec3,
+    BlockDetails, BlockDetailsArgs, Command, CommandType, Dimension, Error, GameResponse,
+    GameResponseArgs, GameResponseBody, Response, ResponseArgs, StateResponse, StateResponseArgs,
+    Vec3,
 };
 use ipc::{ConnectedIpcClient, IpcClient, IpcError};
 
@@ -104,7 +105,10 @@ fn handle_client(mut client: ConnectedIpcClient) -> Result<(), Box<dyn StdError>
             }
             ClientResponse::State { requested_block } => {
                 let block = if requested_block {
-                    Some(BlockDetails::new(true))
+                    Some(BlockDetails::create(
+                        &mut buf,
+                        &BlockDetailsArgs { has_color: true },
+                    ))
                 } else {
                     None
                 };
@@ -113,7 +117,7 @@ fn handle_client(mut client: ConnectedIpcClient) -> Result<(), Box<dyn StdError>
                     player_entity_id: Some(0),
                     player_world: Some(Dimension::Overworld),
                     entity_ids: Some(buf.create_vector_direct(&[0, 1, 2, 3, 4, 5])),
-                    block: block.as_ref(),
+                    block,
                 };
                 StateResponse::create(&mut buf, &state).as_union_value()
             }

@@ -124,6 +124,7 @@ pub enum EntryAssociatedData {
     PlayerId,
     EntityId(i32),
     World(Dimension),
+    Block(BlockPos),
 }
 
 pub struct DynamicInterest {
@@ -139,6 +140,7 @@ struct DynamicPhantom {
     parent: u64,
     child_name: String,
     interest: DynamicStateType,
+    dir_associated_data: EntryAssociatedData,
     dyn_fn: DynamicDirFn,
 }
 
@@ -252,6 +254,7 @@ impl FilesystemStructure {
                         parent: inode,
                         child_name,
                         interest,
+                        dir_associated_data: phantom_ty.into(),
                         dyn_fn: *dyn_fn,
                     });
                 }
@@ -338,7 +341,10 @@ impl FilesystemStructure {
             let phantom_dir = inodes.next().expect("no free inodes"); // should be at least 1
             self.inner.register(
                 phantom_dir,
-                DirEntry::build().finish().into(),
+                DirEntry::build()
+                    .associated_data(phantom.dir_associated_data)
+                    .finish()
+                    .into(),
                 Some((phantom.parent, phantom.child_name)),
             );
 
@@ -592,16 +598,26 @@ impl DirEntryBuilder {
 impl EntryAssociatedData {
     fn apply_to_state(&self, state: &mut CommandState) {
         match self {
-            EntryAssociatedData::EntityId(id) if state.target_entity.is_none() => {
-                state.target_entity = Some(TargetEntity::Entity(*id))
+            EntryAssociatedData::EntityId(id) => {
+                if state.target_entity.is_none() {
+                    state.target_entity = Some(TargetEntity::Entity(*id))
+                }
             }
-            EntryAssociatedData::PlayerId if state.target_entity.is_none() => {
-                state.target_entity = Some(TargetEntity::Player)
+            EntryAssociatedData::PlayerId => {
+                if state.target_entity.is_none() {
+                    state.target_entity = Some(TargetEntity::Player)
+                }
             }
-            EntryAssociatedData::World(dim) if state.target_world.is_none() => {
-                state.target_world = Some(*dim)
+            EntryAssociatedData::World(dim) => {
+                if state.target_world.is_none() {
+                    state.target_world = Some(*dim)
+                }
             }
-            _ => {}
+            EntryAssociatedData::Block(pos) => {
+                if state.target_block.is_none() {
+                    state.target_block = Some(*pos)
+                }
+            }
         }
     }
 
@@ -611,6 +627,16 @@ impl EntryAssociatedData {
                 interest.target_world = Some(*dim)
             }
             _ => {}
+        }
+    }
+}
+
+impl From<PhantomChildType> for EntryAssociatedData {
+    fn from(ty: PhantomChildType) -> Self {
+        match ty {
+            PhantomChildType::Block([x, y, z]) => {
+                EntryAssociatedData::Block(BlockPos::new(x, y, z))
+            }
         }
     }
 }

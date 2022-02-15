@@ -176,7 +176,7 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
                 reg.add_root_entry(
                     "type",
                     FileEntry::build()
-                        .behaviour(FileBehaviour::ReadOnly(
+                        .behaviour(FileBehaviour::ReadWrite(
                             CommandType::BlockType,
                             BodyType::String,
                         ))
@@ -269,7 +269,9 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, generic: b
 
 // ------
 fn parse_block_position(s: &str) -> Option<[i32; 3]> {
-    let mut parts = s.splitn(3, ',').filter_map(|s| s.parse::<i32>().ok());
+    let mut parts = s
+        .splitn(3, &[',', ' '])
+        .filter_map(|s| s.parse::<f32>().ok().map(|f| f as i32));
 
     match (parts.next(), parts.next(), parts.next()) {
         (Some(x), Some(y), Some(z)) => Some([x, y, z]),
@@ -285,6 +287,10 @@ mod tests {
     fn block_pos_parsing() {
         assert!(matches!(
             parse_block_position("1,400,-64"),
+            Some([1, 400, -64])
+        ));
+        assert!(matches!(
+            parse_block_position("1.0 400.0 -64.0"),
             Some([1, 400, -64])
         ));
         assert!(matches!(parse_block_position("0,0,0"), Some([0, 0, 0])));

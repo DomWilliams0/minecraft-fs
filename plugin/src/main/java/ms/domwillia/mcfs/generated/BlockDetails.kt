@@ -8,7 +8,7 @@ import com.google.flatbuffers.*
 
 @Suppress("unused")
 @ExperimentalUnsignedTypes
-class BlockDetails : Struct() {
+class BlockDetails : Table() {
 
     fun __init(_i: Int, _bb: ByteBuffer)  {
         __reset(_i, _bb)
@@ -17,12 +17,28 @@ class BlockDetails : Struct() {
         __init(_i, _bb)
         return this
     }
-    val hasColor : Boolean get() = 0.toByte() != bb.get(bb_pos + 0)
+    val hasColor : Boolean
+        get() {
+            val o = __offset(4)
+            return if(o != 0) 0.toByte() != bb.get(o + bb_pos) else false
+        }
     companion object {
+        fun validateVersion() = Constants.FLATBUFFERS_2_0_0()
+        fun getRootAsBlockDetails(_bb: ByteBuffer): BlockDetails = getRootAsBlockDetails(_bb, BlockDetails())
+        fun getRootAsBlockDetails(_bb: ByteBuffer, obj: BlockDetails): BlockDetails {
+            _bb.order(ByteOrder.LITTLE_ENDIAN)
+            return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
+        }
         fun createBlockDetails(builder: FlatBufferBuilder, hasColor: Boolean) : Int {
-            builder.prep(1, 1)
-            builder.putBoolean(hasColor)
-            return builder.offset()
+            builder.startTable(1)
+            addHasColor(builder, hasColor)
+            return endBlockDetails(builder)
+        }
+        fun startBlockDetails(builder: FlatBufferBuilder) = builder.startTable(1)
+        fun addHasColor(builder: FlatBufferBuilder, hasColor: Boolean) = builder.addBoolean(0, hasColor, false)
+        fun endBlockDetails(builder: FlatBufferBuilder) : Int {
+            val o = builder.endTable()
+            return o
         }
     }
 }

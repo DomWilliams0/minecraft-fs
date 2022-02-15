@@ -3,6 +3,8 @@ package ms.domwillia.mcfs.ipc
 import MCFS.*
 import com.google.flatbuffers.FlatBufferBuilder
 import ms.domwillia.mcfs.MinecraftFsMod
+import net.minecraft.block.Block
+import net.minecraft.block.Blocks
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.network.ClientPlayerEntity
 import net.minecraft.entity.Entity
@@ -11,14 +13,19 @@ import net.minecraft.entity.damage.DamageSource
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.network.ServerPlayerEntity
 import net.minecraft.server.world.ServerWorld
+import net.minecraft.util.Identifier
+import net.minecraft.util.math.BlockPos
 import net.minecraft.util.math.Box
 import net.minecraft.util.math.Vec3d
+import net.minecraft.util.registry.Registry
+import net.minecraft.util.registry.SimpleRegistry
 import net.minecraft.world.World
 import java.nio.ByteBuffer
 
 class NoGameException : Exception()
 class MissingTargetException : Exception()
 class NotLivingException : Exception()
+class BadBlockException(val block: String) : Exception()
 class UnknownEntityException(val id: Int) : Exception()
 class UnsupportedOperationException : Exception()
 class InvalidTypeForWriteException : Exception()
@@ -42,10 +49,15 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                 } catch (e: UnknownEntityException) {
                     MinecraftFsMod.LOGGER.error("no such entity ${e.id}")
                     mkError(Error.NoSuchEntity)
+                } catch (e: BadBlockException) {
+                    MinecraftFsMod.LOGGER.error("bad block: ${e.block}")
+                    mkError(Error.NoSuchBlock)
                 } catch (e: Exception) {
                     MinecraftFsMod.LOGGER.catching(e)
                     mkError(Error.Unknown)
                 }
+
+                // TODO how are errors during writes handled/reported in fuse?
 
                 (maybeRespBody as? Int)?.let {
                     GameResponse.createGameResponse(responseBuilder, GameResponseBody.Response, it)
@@ -110,6 +122,36 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                 }
             }
 
+            CommandType.BlockType -> {
+                val value = command.rwString();
+                val pos = getTargetBlockPos(command)
+                val world = getTargetWorld(command)
+                if (value == null) {
+                    val state = world.getBlockState(pos)
+                    val id = Registry.BLOCK.getId(state.block);
+                    mkString(id.toString())
+                } else {
+                    val toParse = value.lowercase()
+                    try {
+                        val id = if (toParse.contains(':')) {
+                            Identifier(value)
+                        } else {
+                            Identifier("minecraft", toParse)
+                        }
+
+                        val block = (Registry.BLOCK as SimpleRegistry<Block>).get(id)!!
+                        val state = block.defaultState
+
+                        // TODO return result
+                        world.setBlockState(pos, state)
+
+                    } catch (e: Exception) {
+                        MinecraftFsMod.LOGGER.catching(e);
+                        throw BadBlockException(toParse)
+                    }
+                }
+            }
+
             CommandType.ControlSay -> {
                 val value = command.woString()
                 val player = MinecraftClient.getInstance().player ?: throw NoGameException()
@@ -150,6 +192,15 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
             null
         }
 
+        val block = if (world != null && req.targetBlock != null) {
+            val tgt = req.targetBlock!!
+            val state = world.getBlockState(BlockPos(tgt.x, tgt.y, tgt.z))
+
+            BlockDetails.createBlockDetails(responseBuilder, hasColor = state.material != null)
+        } else {
+            null
+        }
+
         StateResponse.startStateResponse(responseBuilder)
         if (player != null) {
             StateResponse.addPlayerEntityId(responseBuilder, player.id)
@@ -166,6 +217,11 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
         if (entityIds != null) {
             StateResponse.addEntityIds(responseBuilder, entityIds)
         }
+
+        if (block != null) {
+            StateResponse.addBlock(responseBuilder, block)
+        }
+
         return StateResponse.endStateResponse(responseBuilder)
     }
 
@@ -237,6 +293,11 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
         return resolveWorld(dim) ?: throw IllegalArgumentException("world not found")
     }
 
+    private fun getTargetBlockPos(command: Command): BlockPos {
+        val block = command.targetBlock ?: throw MissingTargetException()
+        return BlockPos(block.x, block.y, block.z)
+    }
+
     private fun resolveWorld(dim: UByte): ServerWorld? {
         val server = theServer
         return when (dim) {
@@ -265,6 +326,15 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
         val writeBody = this.write
         return if (writeBody != null) {
             writeBody.int ?: throw InvalidTypeForWriteException()
+        } else {
+            null
+        }
+    }
+
+    private fun Command.rwString(): String? {
+        val writeBody = this.write
+        return if (writeBody != null) {
+            writeBody.string ?: throw InvalidTypeForWriteException()
         } else {
             null
         }

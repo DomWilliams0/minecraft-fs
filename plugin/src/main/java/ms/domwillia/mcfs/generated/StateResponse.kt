@@ -45,7 +45,7 @@ class StateResponse : Table() {
     fun block(obj: MCFS.BlockDetails) : MCFS.BlockDetails? {
         val o = __offset(10)
         return if (o != 0) {
-            obj.__assign(o + bb_pos, bb)
+            obj.__assign(__indirect(o + bb_pos), bb)
         } else {
             null
         }
@@ -56,6 +56,14 @@ class StateResponse : Table() {
         fun getRootAsStateResponse(_bb: ByteBuffer, obj: StateResponse): StateResponse {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
+        }
+        fun createStateResponse(builder: FlatBufferBuilder, playerEntityId: Int?, playerWorld: UByte?, entityIdsOffset: Int, blockOffset: Int) : Int {
+            builder.startTable(4)
+            addBlock(builder, blockOffset)
+            addEntityIds(builder, entityIdsOffset)
+            playerEntityId?.run { addPlayerEntityId(builder, playerEntityId) }
+            playerWorld?.run { addPlayerWorld(builder, playerWorld) }
+            return endStateResponse(builder)
         }
         fun startStateResponse(builder: FlatBufferBuilder) = builder.startTable(4)
         fun addPlayerEntityId(builder: FlatBufferBuilder, playerEntityId: Int) = builder.addInt(0, playerEntityId, 0)
@@ -69,7 +77,7 @@ class StateResponse : Table() {
             return builder.endVector()
         }
         fun startEntityIdsVector(builder: FlatBufferBuilder, numElems: Int) = builder.startVector(4, numElems, 4)
-        fun addBlock(builder: FlatBufferBuilder, block: Int) = builder.addStruct(3, block, 0)
+        fun addBlock(builder: FlatBufferBuilder, block: Int) = builder.addOffset(3, block, 0)
         fun endStateResponse(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

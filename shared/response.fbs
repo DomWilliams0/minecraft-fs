@@ -6,7 +6,8 @@ enum Error:int32 {
     UnknownCommand,
 	NoGame,
 	MalformedRequest,
-	NoSuchEntity
+	NoSuchEntity,
+	NoSuchBlock,
 }
 
 table Response {
@@ -30,7 +31,7 @@ table StateResponse {
     block:BlockDetails;
 }
 
-struct BlockDetails {
+table BlockDetails {
     has_color:bool;
 }
 

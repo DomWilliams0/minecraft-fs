@@ -71,8 +71,8 @@ impl BodyType {
             BodyType::Integer => data.parse().ok().map(Body::Integer),
             BodyType::String => Some(Body::String(data.into())),
             BodyType::Position => {
-                let xyz = data.split_whitespace();
-                let mut iter = xyz.into_iter().take(3).map(|s| s.parse());
+                let xyz = data.splitn(3, &[',', ' ']);
+                let mut iter = xyz.into_iter().map(|s| s.parse());
 
                 if let (Some(Ok(x)), Some(Ok(y)), Some(Ok(z))) =
                     (iter.next(), iter.next(), iter.next())
@@ -82,6 +82,26 @@ impl BodyType {
                     None
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_pos() {
+        let pos = BodyType::Position
+            .create_from_data(b"100,70,100\n")
+            .expect("parse failed");
+        match pos {
+            Body::Vec { x, y, z } => {
+                assert_eq!(x, 100.0);
+                assert_eq!(y, 70.0);
+                assert_eq!(z, 100.0);
+            }
+            _ => unreachable!(),
         }
     }
 }

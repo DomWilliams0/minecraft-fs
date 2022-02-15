@@ -11,7 +11,8 @@ class Error private constructor() {
         const val NoGame: Int = 2
         const val MalformedRequest: Int = 3
         const val NoSuchEntity: Int = 4
-        val names : Array<String> = arrayOf("Unknown", "UnknownCommand", "NoGame", "MalformedRequest", "NoSuchEntity")
+        const val NoSuchBlock: Int = 5
+        val names : Array<String> = arrayOf("Unknown", "UnknownCommand", "NoGame", "MalformedRequest", "NoSuchEntity", "NoSuchBlock")
         fun name(e: Int) : String = names[e]
     }
 }
