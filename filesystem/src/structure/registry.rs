@@ -26,7 +26,7 @@ struct StructureInner {
     root: u64,
     registry: HashMap<u64, Entry>,
     /// parent -> list of children
-    child_registry: HashMap<u64, Vec<(u64, ChildType, Cow<'static, str>)>>,
+    child_registry: HashMap<u64, Vec<(u64, Cow<'static, str>)>>,
 
     /// child -> parent
     parent_registry: HashMap<u64, u64>,
@@ -35,11 +35,6 @@ struct StructureInner {
     dynamic_state: HashMap<(u64, DynamicStateType), DynamicState>,
 
     phantom_registry: HashMap<u64, (PhantomChildFn, PhantomDynamicInterestFn, DynamicDirFn)>,
-}
-
-enum ChildType {
-    Phantom,
-    Normal,
 }
 
 pub type PhantomChildFn = fn(&str) -> Option<PhantomChildType>;
@@ -190,7 +185,7 @@ impl FilesystemStructure {
     pub fn lookup_child(&self, parent: u64, name: &OsStr) -> Option<(u64, &Entry)> {
         let name = name.to_str()?; // utf8 only
         self.inner.child_registry.get(&parent).and_then(|children| {
-            children.iter().find_map(|(ino, _, child_name)| {
+            children.iter().find_map(|(ino, child_name)| {
                 if child_name == name {
                     Some((*ino, self.get_inode(*ino)))
                 } else {
@@ -200,16 +195,10 @@ impl FilesystemStructure {
         })
     }
 
-    /// Ignores phantom children
     pub fn lookup_children(&self, inode: u64) -> Option<impl Iterator<Item = (&Entry, &str)> + '_> {
         self.inner.child_registry.get(&inode).map(|v| {
-            v.iter().filter_map(|(inode, ty, name)| {
-                if let ChildType::Normal = ty {
-                    Some((self.get_inode(*inode), name.as_ref()))
-                } else {
-                    None
-                }
-            })
+            v.iter()
+                .map(|(inode, name)| (self.get_inode(*inode), name.as_ref()))
         })
     }
 
@@ -326,12 +315,8 @@ impl FilesystemStructure {
         // register dynamic entries
         for (new_inode, new_name, new_entry, new_parent) in registrationer.entries {
             let new_parent = new_parent.unwrap_or(parent);
-            self.inner.register(
-                new_inode,
-                new_entry,
-                Some((new_parent, new_name)),
-                ChildType::Normal,
-            );
+            self.inner
+                .register(new_inode, new_entry, Some((new_parent, new_name)));
         }
 
         let state = DynamicState {
@@ -355,7 +340,6 @@ impl FilesystemStructure {
                 phantom_dir,
                 DirEntry::build().finish().into(),
                 Some((phantom.parent, phantom.child_name)),
-                ChildType::Phantom,
             );
 
             // register entries under new phantom dir
@@ -449,8 +433,7 @@ impl FilesystemStructureBuilder {
             .next()
             .expect("exhausted static inodes");
 
-        self.inner
-            .register(inode, entry, parent_info, ChildType::Normal);
+        self.inner.register(inode, entry, parent_info);
 
         inode
     }
@@ -478,7 +461,6 @@ impl StructureInner {
         inode: u64,
         entry: Entry,
         parent_info: Option<(u64, impl Into<Cow<'static, str>>)>,
-        ty: ChildType,
     ) {
         self.registry.insert(inode, entry);
 
@@ -490,26 +472,20 @@ impl StructureInner {
                 parent,
                 name
             );
-            self.add_child_to_parent(parent, name, inode, ty)
+            self.add_child_to_parent(parent, name, inode)
         } else {
             trace!("registered inode {}", inode);
         }
     }
 
-    fn add_child_to_parent(
-        &mut self,
-        parent: u64,
-        child_name: Cow<'static, str>,
-        child: u64,
-        ty: ChildType,
-    ) {
+    fn add_child_to_parent(&mut self, parent: u64, child_name: Cow<'static, str>, child: u64) {
         use std::collections::hash_map::Entry;
         let children = match self.child_registry.entry(parent) {
             Entry::Occupied(entries) => entries.into_mut(),
             Entry::Vacant(entry) => entry.insert(Vec::new()),
         };
 
-        children.push((child, ty, child_name));
+        children.push((child, child_name));
 
         if self.parent_registry.insert(child, parent).is_some() {
             panic!("multiple parents for child {}", child);
