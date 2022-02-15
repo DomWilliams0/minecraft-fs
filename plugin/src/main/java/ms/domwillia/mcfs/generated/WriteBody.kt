@@ -43,6 +43,15 @@ class WriteBody : Table() {
             null
         }
     }
+    val block : MCFS.BlockPos? get() = block(MCFS.BlockPos())
+    fun block(obj: MCFS.BlockPos) : MCFS.BlockPos? {
+        val o = __offset(12)
+        return if (o != 0) {
+            obj.__assign(o + bb_pos, bb)
+        } else {
+            null
+        }
+    }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_2_0_0()
         fun getRootAsWriteBody(_bb: ByteBuffer): WriteBody = getRootAsWriteBody(_bb, WriteBody())
@@ -50,11 +59,12 @@ class WriteBody : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun startWriteBody(builder: FlatBufferBuilder) = builder.startTable(4)
+        fun startWriteBody(builder: FlatBufferBuilder) = builder.startTable(5)
         fun addFloat(builder: FlatBufferBuilder, float: Float) = builder.addFloat(0, float, 0.0)
         fun addInt(builder: FlatBufferBuilder, int: Int) = builder.addInt(1, int, 0)
         fun addString(builder: FlatBufferBuilder, string: Int) = builder.addOffset(2, string, 0)
         fun addVec(builder: FlatBufferBuilder, vec: Int) = builder.addStruct(3, vec, 0)
+        fun addBlock(builder: FlatBufferBuilder, block: Int) = builder.addStruct(4, block, 0)
         fun endWriteBody(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o

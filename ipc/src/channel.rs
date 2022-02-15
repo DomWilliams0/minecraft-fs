@@ -7,8 +7,8 @@ use thiserror::Error;
 
 use crate::command::{Body, BodyType, CommandState, TargetEntity};
 use crate::generated::{
-    CommandArgs, CommandType, Error, GameRequest, GameRequestArgs, GameRequestBody, GameResponse,
-    GameResponseBody, StateRequest, StateRequestArgs, StateResponse, Vec3, WriteBody,
+    BlockPos, CommandArgs, CommandType, Error, GameRequest, GameRequestArgs, GameRequestBody,
+    GameResponse, GameResponseBody, StateRequest, StateRequestArgs, StateResponse, Vec3, WriteBody,
     WriteBodyArgs,
 };
 
@@ -149,11 +149,13 @@ impl IpcChannel {
                 let mut int = None;
                 let mut string = None;
                 let mut pos = None;
+                let mut block = None;
                 match body {
                     Body::Integer(val) => int = Some(val),
                     Body::Float(val) => float = Some(val),
                     Body::String(val) => string = Some(buf.create_string(&val)),
                     Body::Vec { x, y, z } => pos = Some(Vec3::new(x, y, z)),
+                    Body::Block { x, y, z } => block = Some(BlockPos::new(x, y, z)),
                 }
                 WriteBody::create(
                     &mut buf,
@@ -162,6 +164,7 @@ impl IpcChannel {
                         int,
                         string,
                         vec: pos.as_ref(),
+                        block: block.as_ref(),
                     },
                 )
             });
@@ -179,6 +182,7 @@ impl IpcChannel {
                     target_entity,
                     target_player_entity,
                     target_world: state.target_world,
+                    target_block: state.target_block.as_ref(),
                     write: write_body,
                 },
             )

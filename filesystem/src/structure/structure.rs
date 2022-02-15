@@ -1,15 +1,17 @@
+use ipc::generated::{CommandType, Dimension};
+use ipc::BodyType;
+use ipc::BodyType::*;
+
 use crate::structure::registry::EntryFilterResult::{Exclude, IncludeAllChildren};
 use crate::structure::registry::{
     DynamicDirRegistrationer, DynamicStateType, FilesystemStructureBuilder, LinkEntry,
+    PhantomChildType,
 };
-use crate::structure::EntryAssociatedData::*;
+
 use crate::structure::FileBehaviour::*;
 use crate::structure::{
     DirEntry, EntryAssociatedData, FileBehaviour, FileEntry, FilesystemStructure,
 };
-use ipc::generated::{CommandType, Dimension};
-use ipc::BodyType;
-use ipc::BodyType::*;
 
 #[allow(unused_variables)]
 pub fn create_structure() -> FilesystemStructure {
@@ -143,6 +145,60 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
                 .behaviour(FileBehaviour::ReadWrite(CommandType::WorldTime, Integer))
                 .finish(),
         );
+
+        let blocks_dir = builder.add_entry(world, "blocks", DirEntry::default());
+
+        builder.add_entry(
+            blocks_dir,
+            "README",
+            FileEntry::build()
+                .behaviour(FileBehaviour::Static(
+                    "Path format is ./x,y,z\ne.g. 0,64,100\n",
+                ))
+                .finish(),
+        );
+
+        let parse_pos = |name: &str| {
+            parse_block_position(name).map(|[x, y, z]| PhantomChildType::Block([x, y, z]))
+        };
+
+        builder.add_phantom(
+            blocks_dir,
+            parse_pos,
+            |ty| {
+                let PhantomChildType::Block(pos) = ty;
+                DynamicStateType::Block(pos)
+            },
+            |state, reg| {
+                // TODO support writing
+                let block = state.block.as_ref().expect("missing block details");
+
+                reg.add_root_entry(
+                    "type",
+                    FileEntry::build()
+                        .behaviour(FileBehaviour::ReadOnly(
+                            CommandType::BlockType,
+                            BodyType::String,
+                        ))
+                        .finish(),
+                );
+
+                // TODO add static file with block pos
+
+                // TODO useful block info
+                if block.has_color {
+                    reg.add_root_entry(
+                        "color",
+                        FileEntry::build()
+                            .behaviour(FileBehaviour::ReadOnly(
+                                CommandType::BlockColor,
+                                BodyType::String,
+                            ))
+                            .finish(),
+                    );
+                }
+            },
+        );
     }
 
     dir
@@ -208,5 +264,33 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, generic: b
                 .behaviour(ReadOnly(CommandType::EntityType, String))
                 .finish(),
         );
+    }
+}
+
+// ------
+fn parse_block_position(s: &str) -> Option<[i32; 3]> {
+    let mut parts = s.splitn(3, ',').filter_map(|s| s.parse::<i32>().ok());
+
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some(x), Some(y), Some(z)) => Some([x, y, z]),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn block_pos_parsing() {
+        assert!(matches!(
+            parse_block_position("1,400,-64"),
+            Some([1, 400, -64])
+        ));
+        assert!(matches!(parse_block_position("0,0,0"), Some([0, 0, 0])));
+        assert!(parse_block_position("oof").is_none());
+        assert!(parse_block_position("1,2,3,4").is_none());
+        assert!(parse_block_position("500,200").is_none());
+        assert!(parse_block_position("123,nice,200").is_none());
     }
 }

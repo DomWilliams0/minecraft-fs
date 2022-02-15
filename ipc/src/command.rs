@@ -1,4 +1,4 @@
-use crate::generated::{CommandType, Dimension};
+use crate::generated::{BlockPos, CommandType, Dimension};
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
@@ -15,6 +15,7 @@ pub enum Body<'a> {
     Float(f32),
     String(Cow<'a, str>),
     Vec { x: f64, y: f64, z: f64 },
+    Block { x: i32, y: i32, z: i32 },
 }
 
 pub enum TargetEntity {
@@ -26,6 +27,7 @@ pub enum TargetEntity {
 pub struct CommandState {
     pub target_entity: Option<TargetEntity>,
     pub target_world: Option<Dimension>,
+    pub target_block: Option<BlockPos>,
 }
 
 pub struct Command {
@@ -42,6 +44,7 @@ impl Display for Body<'_> {
             Body::Integer(val) => Display::fmt(val, f),
             Body::String(val) => Display::fmt(val, f),
             Body::Vec { x, y, z } => write!(f, "{:?} {:?} {:?}", x, y, z),
+            Body::Block { x, y, z } => write!(f, "{:?} {:?} {:?}", x, y, z),
         }
     }
 }

@@ -1,9 +1,10 @@
-use ipc::generated::{Dimension, StateRequestArgs};
-use ipc::{IpcChannel, IpcError};
-use std::fmt::{Debug, Formatter};
-
-use log::trace;
+use std::fmt::Debug;
 use std::time::{Duration, SystemTime};
+
+use log::{debug, trace};
+
+use ipc::generated::{BlockPos, Dimension, StateRequestArgs};
+use ipc::{IpcChannel, IpcError};
 
 const CACHE_TIME: Duration = Duration::from_millis(500);
 
@@ -12,6 +13,12 @@ pub struct GameState {
     pub player_entity_id: Option<i32>,
     pub player_world: Option<Dimension>,
     pub entity_ids: Vec<i32>,
+    pub block: Option<BlockDetails>,
+}
+
+#[derive(Debug)]
+pub struct BlockDetails {
+    pub has_color: bool,
 }
 
 pub struct CachedGameState {
@@ -21,7 +28,13 @@ pub struct CachedGameState {
     state: GameState,
 }
 
-pub type GameStateInterest = StateRequestArgs;
+/// Maps to generated `StateRequestArgs`
+#[derive(Default, Debug)]
+pub struct GameStateInterest {
+    pub entities_by_id: bool,
+    pub target_world: Option<Dimension>,
+    pub target_block: Option<BlockPos>,
+}
 
 impl Default for CachedGameState {
     fn default() -> Self {
@@ -29,6 +42,16 @@ impl Default for CachedGameState {
             last_query: SystemTime::now(),
             state: GameState::default(),
             last_interest: GameStateInterest::default(),
+        }
+    }
+}
+
+impl GameStateInterest {
+    pub fn as_state_request_args(&self) -> StateRequestArgs {
+        StateRequestArgs {
+            entities_by_id: self.entities_by_id,
+            target_world: self.target_world,
+            target_block: self.target_block.as_ref(),
         }
     }
 }
@@ -51,12 +74,21 @@ impl CachedGameState {
             .map(|d| d > CACHE_TIME)
             .unwrap_or(true);
 
-        if stale || GameStateInterestWrapper(&self.last_interest).is_additive(&interest) {
-            log::debug!(
-                "sending state request with interest: {:?}",
-                GameStateInterestWrapper(&interest)
-            );
-            let response = ipc.send_state_request(&interest)?;
+        log::debug!("getting state for interest: {:?}", interest);
+        let additive = self.last_interest.is_additive(&interest);
+        if stale || additive {
+            if stale {
+                trace!("old state is stale");
+            }
+            if additive {
+                trace!(
+                    "new interest is additive to old interest: {:?}",
+                    self.last_interest
+                )
+            }
+            debug!("sending state request");
+
+            let response = ipc.send_state_request(&interest.as_state_request_args())?;
 
             self.state = GameState {
                 player_entity_id: response.player_entity_id(),
@@ -65,31 +97,33 @@ impl CachedGameState {
                     .entity_ids()
                     .map(|v| v.into_iter().collect())
                     .unwrap_or_default(),
+                block: response.block().map(|b| BlockDetails {
+                    has_color: b.has_color(),
+                }),
             };
             trace!("new game state: {:?}", self.state);
             self.last_query = now;
             self.last_interest = interest;
+        } else {
+            debug!("using cached state for interest");
+            trace!("previous interest: {:?}", self.last_interest);
         }
 
         Ok(&self.state)
     }
 }
 
-struct GameStateInterestWrapper<'a>(&'a GameStateInterest);
-
-impl Debug for GameStateInterestWrapper<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("GameStateInterest")
-            .field("entities_by_id", &self.0.entities_by_id)
-            .field("target_world", &self.0.target_world)
-            .finish()
-    }
-}
-
-impl GameStateInterestWrapper<'_> {
+impl GameStateInterest {
     fn is_additive(&self, newer: &GameStateInterest) -> bool {
-        if !self.0.entities_by_id && newer.entities_by_id {
+        if !self.entities_by_id && newer.entities_by_id {
             return true;
+        }
+
+        if newer.target_block.is_some() {
+            // only bother checking if we now care about target block
+            if self.target_block != newer.target_block {
+                return true;
+            }
         }
 
         false

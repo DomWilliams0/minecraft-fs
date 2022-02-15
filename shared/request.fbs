@@ -9,6 +9,9 @@ enum CommandType:int32 {
 
 	WorldTime,
 
+	BlockType,
+	BlockColor,
+
 	ControlSay,
 	ControlJump,
 	ControlMove,
@@ -20,14 +23,18 @@ table WriteBody {
 	int:int = null;
 	string:string;
 	vec:Vec3;
+	block:BlockPos;
 }
 
 table Command {
     cmd:CommandType;
+
     target_entity:int32 = null;
     // if target_entity is null but this is true, use the player entity
     target_player_entity:bool = false;
     target_world:Dimension = null;
+    // needs target_world as well
+    target_block:BlockPos;
 
     // if null, command is a read
     write:WriteBody;
@@ -38,6 +45,8 @@ table Command {
 table StateRequest {
     entities_by_id: bool = false;
     target_world:Dimension = null;
+    // needs target_world as well
+    target_block:BlockPos;
 }
 
 union GameRequestBody {Command, StateRequest}

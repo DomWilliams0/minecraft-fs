@@ -6,6 +6,12 @@ struct Vec3 {
     z:double;
 }
 
+struct BlockPos {
+    x:int32;
+    y:int32;
+    z:int32;
+}
+
 enum Dimension:uint8 {
     Overworld = 1,
     Nether,

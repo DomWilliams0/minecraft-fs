@@ -4,8 +4,8 @@ use std::fmt::Write;
 use std::time::{Duration, SystemTime};
 
 use fuser::{
-    FileAttr, FileType, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, ReplyIoctl, ReplyLock,
-    ReplyLseek, ReplyOpen, ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
+    FileAttr, FileType, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, ReplyWrite, Request,
+    TimeOrNow,
 };
 use log::*;
 
@@ -33,7 +33,7 @@ impl fuser::Filesystem for MinecraftFs {
         let (inode, entry) = match self.structure.lookup_child(parent, name) {
             Some(tup) => tup,
             None => {
-                let interest = self.structure.interest_for_inode(parent);
+                let interest = self.structure.interest_for_inode(parent, Some(name));
                 let state = match self.state.get(&mut self.ipc, interest.as_interest()) {
                     Ok(state) => state,
                     Err(err) => {
@@ -105,7 +105,7 @@ impl fuser::Filesystem for MinecraftFs {
 
         match self.structure.lookup_inode(ino) {
             Some(Entry::Link(link)) => {
-                let interest = self.structure.interest_for_inode(ino);
+                let interest = self.structure.interest_for_inode(ino, None);
                 let state = match self.state.get(&mut self.ipc, interest.as_interest()) {
                     Ok(state) => state,
                     Err(err) => {
@@ -151,6 +151,13 @@ impl fuser::Filesystem for MinecraftFs {
         let (cmd, resp) = match file.behaviour() {
             Some(FileBehaviour::ReadOnly(cmd, resp) | FileBehaviour::ReadWrite(cmd, resp)) => {
                 (cmd, resp)
+            }
+            Some(FileBehaviour::Static(msg)) => {
+                let msg = msg.as_bytes();
+                let start = offset as usize;
+                let end = (start + size as usize).min(msg.len());
+                let data = msg.get(start..end).unwrap_or(&[]);
+                return reply.data(data);
             }
             _ => return reply.error(libc::EOPNOTSUPP),
         };
@@ -231,7 +238,7 @@ impl fuser::Filesystem for MinecraftFs {
             _ => return reply.error(libc::ENOENT),
         };
 
-        let interest = self.structure.interest_for_inode(ino);
+        let interest = self.structure.interest_for_inode(ino, None);
         let state = match self.state.get(&mut self.ipc, interest.as_interest()) {
             Ok(state) => state,
             Err(err) => {

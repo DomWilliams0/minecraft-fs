@@ -25,6 +25,13 @@ table StateResponse {
     player_world:Dimension = null;
     // only present if requested
     entity_ids:[int32];
+
+    // only present if target block and world were in request
+    block:BlockDetails;
+}
+
+struct BlockDetails {
+    has_color:bool;
 }
 
 union GameResponseBody {Response, StateResponse}

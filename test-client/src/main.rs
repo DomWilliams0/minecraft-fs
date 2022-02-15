@@ -5,8 +5,8 @@ use flatbuffers::FlatBufferBuilder;
 use log::*;
 
 use ipc::generated::{
-    Command, CommandType, Dimension, Error, GameResponse, GameResponseArgs, GameResponseBody,
-    Response, ResponseArgs, StateResponse, StateResponseArgs, Vec3,
+    BlockDetails, Command, CommandType, Dimension, Error, GameResponse, GameResponseArgs,
+    GameResponseBody, Response, ResponseArgs, StateResponse, StateResponseArgs, Vec3,
 };
 use ipc::{ConnectedIpcClient, IpcClient, IpcError};
 
@@ -31,7 +31,7 @@ enum ClientCommandResponse {
 
 enum ClientResponse {
     Command(ClientCommandResponse),
-    State, // TODO
+    State { requested_block: bool },
 }
 
 fn target_entity(cmd: &Command) -> Result<i32, Error> {
@@ -79,9 +79,11 @@ fn handle_client(mut client: ConnectedIpcClient) -> Result<(), Box<dyn StdError>
                 }
                 _ => ClientCommandResponse::Error(Error::UnknownCommand),
             })
-        } else if let Some(_req) = msg.body_as_state_request() {
+        } else if let Some(req) = msg.body_as_state_request() {
             resp_body_type = GameResponseBody::StateResponse;
-            ClientResponse::State
+            ClientResponse::State {
+                requested_block: req.target_world().is_some() && req.target_block().is_some(),
+            }
         } else {
             unreachable!("bad msg type") // TODO send error?
         };
@@ -100,11 +102,18 @@ fn handle_client(mut client: ConnectedIpcClient) -> Result<(), Box<dyn StdError>
                 }
                 Response::create(&mut buf, &body).as_union_value()
             }
-            ClientResponse::State => {
+            ClientResponse::State { requested_block } => {
+                let block = if requested_block {
+                    Some(BlockDetails::new(true))
+                } else {
+                    None
+                };
+
                 let state = StateResponseArgs {
                     player_entity_id: Some(0),
                     player_world: Some(Dimension::Overworld),
                     entity_ids: Some(buf.create_vector_direct(&[0, 1, 2, 3, 4, 5])),
+                    block: block.as_ref(),
                 };
                 StateResponse::create(&mut buf, &state).as_union_value()
             }

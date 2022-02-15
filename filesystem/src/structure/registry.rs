@@ -1,13 +1,16 @@
-use crate::state::{GameState, GameStateInterest};
-use crate::structure::inode::{InodeBlock, InodeBlockAllocator};
-use ipc::generated::{CommandType, Dimension};
-use ipc::{BodyType, CommandState, TargetEntity};
-use log::trace;
-use smallvec::{smallvec, SmallVec};
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::time::{Duration, Instant};
+
+use log::trace;
+use smallvec::{smallvec, SmallVec};
+
+use ipc::generated::{BlockPos, CommandType, Dimension};
+use ipc::{BodyType, CommandState, TargetEntity};
+
+use crate::state::{GameState, GameStateInterest};
+use crate::structure::inode::{InodeBlock, InodeBlockAllocator};
 
 pub struct FilesystemStructure {
     inner: StructureInner,
@@ -23,19 +26,34 @@ struct StructureInner {
     root: u64,
     registry: HashMap<u64, Entry>,
     /// parent -> list of children
-    child_registry: HashMap<u64, Vec<(u64, Cow<'static, str>)>>,
+    child_registry: HashMap<u64, Vec<(u64, ChildType, Cow<'static, str>)>>,
 
     /// child -> parent
     parent_registry: HashMap<u64, u64>,
 
     /// owning dir inode -> _
-    dynamic_state: HashMap<u64, DynamicState>,
+    dynamic_state: HashMap<(u64, DynamicStateType), DynamicState>,
+
+    phantom_registry: HashMap<u64, (PhantomChildFn, PhantomDynamicInterestFn, DynamicDirFn)>,
 }
+
+enum ChildType {
+    Phantom,
+    Normal,
+}
+
+pub type PhantomChildFn = fn(&str) -> Option<PhantomChildType>;
 
 #[derive(Hash, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum DynamicStateType {
-    EntityIds = 0,
+    EntityIds,
     PlayerId,
+    Block([i32; 3]),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum PhantomChildType {
+    Block([i32; 3]),
 }
 
 // TODO 1 second
@@ -59,6 +77,8 @@ pub struct DynamicDirRegistrationer {
     parent: u64,
 }
 pub type DynamicDirFn = fn(&GameState, &mut DynamicDirRegistrationer);
+
+pub type PhantomDynamicInterestFn = fn(PhantomChildType) -> DynamicStateType;
 
 pub type FileFilterFn = fn(&GameState) -> bool;
 pub type DirFilterFn = fn(&GameState) -> EntryFilterResult;
@@ -102,6 +122,7 @@ pub enum FileBehaviour {
     WriteOnly(CommandType, BodyType),
     ReadWrite(CommandType, BodyType),
     // TODO rw with different types
+    Static(&'static str),
 }
 
 pub enum EntryAssociatedData {
@@ -112,9 +133,23 @@ pub enum EntryAssociatedData {
 
 pub struct DynamicInterest {
     /// (inode, interest)
-    inodes: SmallVec<[(u64, DynamicStateType); 2]>,
+    inodes: SmallVec<[(DynamicInode, DynamicStateType); 2]>,
     need_fetching: HashSet<DynamicStateType>,
     interest: GameStateInterest,
+    /// To be generated under the parent inode
+    phantom: Option<DynamicPhantom>,
+}
+
+struct DynamicPhantom {
+    parent: u64,
+    child_name: String,
+    interest: DynamicStateType,
+    dyn_fn: DynamicDirFn,
+}
+
+enum DynamicInode {
+    Phantom(u64),
+    Inode(u64),
 }
 
 impl FilesystemStructure {
@@ -136,6 +171,7 @@ impl FilesystemStructure {
                 child_registry: HashMap::new(),
                 parent_registry: HashMap::new(),
                 dynamic_state: HashMap::new(),
+                phantom_registry: HashMap::new(),
             },
         }
     }
@@ -154,7 +190,7 @@ impl FilesystemStructure {
     pub fn lookup_child(&self, parent: u64, name: &OsStr) -> Option<(u64, &Entry)> {
         let name = name.to_str()?; // utf8 only
         self.inner.child_registry.get(&parent).and_then(|children| {
-            children.iter().find_map(|(ino, child_name)| {
+            children.iter().find_map(|(ino, _, child_name)| {
                 if child_name == name {
                     Some((*ino, self.get_inode(*ino)))
                 } else {
@@ -164,16 +200,26 @@ impl FilesystemStructure {
         })
     }
 
+    /// Ignores phantom children
     pub fn lookup_children(&self, inode: u64) -> Option<impl Iterator<Item = (&Entry, &str)> + '_> {
         self.inner.child_registry.get(&inode).map(|v| {
-            v.iter()
-                .map(|(inode, name)| (self.get_inode(*inode), name.as_ref()))
+            v.iter().filter_map(|(inode, ty, name)| {
+                if let ChildType::Normal = ty {
+                    Some((self.get_inode(*inode), name.as_ref()))
+                } else {
+                    None
+                }
+            })
         })
     }
 
     /// Walks the hierarchy to find dirs with dynamic interest, and produces
     /// an interest for the whole hierarchy
-    pub fn interest_for_inode(&self, inode: u64) -> DynamicInterest {
+    pub fn interest_for_inode(
+        &self,
+        inode: u64,
+        looked_up_child: Option<&OsStr>,
+    ) -> DynamicInterest {
         let mut dynamics_required = SmallVec::new();
         let mut interest = GameStateInterest::default();
 
@@ -182,7 +228,7 @@ impl FilesystemStructure {
             match entry {
                 Entry::Dir(dir) => {
                     if let Some((interest, _)) = dir.dynamic {
-                        dynamics_required.push((ancestor, interest));
+                        dynamics_required.push((DynamicInode::Inode(ancestor), interest));
                     }
 
                     if let Some(data) = dir.associated_data.as_ref() {
@@ -198,9 +244,38 @@ impl FilesystemStructure {
             };
         });
 
+        let mut phantom = None;
+        if let Some(child_name) = looked_up_child {
+            if let Some((phantom_fn, interest_fn, dyn_fn)) = self.inner.phantom_registry.get(&inode)
+            {
+                let child_name = child_name.to_string_lossy().into_owned();
+                let phantom_ty = (phantom_fn)(&child_name);
+                if let Some(phantom_ty) = phantom_ty {
+                    trace!(
+                        "looking up child {:?} under phantom inode {}",
+                        child_name,
+                        inode
+                    );
+                    let interest = (interest_fn)(phantom_ty);
+                    dynamics_required.push((DynamicInode::Phantom(inode), interest));
+
+                    phantom = Some(DynamicPhantom {
+                        parent: inode,
+                        child_name,
+                        interest,
+                        dyn_fn: *dyn_fn,
+                    });
+                }
+            }
+        }
+
         let mut need_fetching = HashSet::new();
         for (inode, interest) in dynamics_required.iter() {
-            if let Some(state) = self.inner.dynamic_state.get(inode) {
+            let inode = match inode {
+                DynamicInode::Inode(inode) | DynamicInode::Phantom(inode) => inode,
+            };
+
+            if let Some(state) = self.inner.dynamic_state.get(&(*inode, *interest)) {
                 if state.time_collected.elapsed() <= STATE_TTL {
                     // cache is valid
                     continue;
@@ -217,7 +292,10 @@ impl FilesystemStructure {
                     interest.entities_by_id = true;
                 }
 
-                DynamicStateType::PlayerId => {}
+                DynamicStateType::PlayerId => { /* always returned */ }
+                &DynamicStateType::Block([x, y, z]) => {
+                    interest.target_block = Some(BlockPos::new(x, y, z));
+                }
             }
         }
 
@@ -225,51 +303,94 @@ impl FilesystemStructure {
             inodes: dynamics_required,
             need_fetching,
             interest,
+            phantom,
+        }
+    }
+
+    fn register_dynamic_entries(
+        &mut self,
+        dyn_fn: DynamicDirFn,
+        parent: u64,
+        interest: DynamicStateType,
+        inodes: Option<InodeBlock>,
+        state: &GameState,
+    ) {
+        let mut registrationer = DynamicDirRegistrationer {
+            inodes: inodes.unwrap_or_else(|| self.inner.inode_alloc.allocate()),
+            entries: Vec::new(),
+            parent,
+        };
+
+        (dyn_fn)(state, &mut registrationer);
+
+        // register dynamic entries
+        for (new_inode, new_name, new_entry, new_parent) in registrationer.entries {
+            let new_parent = new_parent.unwrap_or(parent);
+            self.inner.register(
+                new_inode,
+                new_entry,
+                Some((new_parent, new_name)),
+                ChildType::Normal,
+            );
+        }
+
+        let state = DynamicState {
+            inodes: smallvec![registrationer.inodes],
+            time_collected: Instant::now(),
+        };
+
+        let prev = self.inner.dynamic_state.insert((parent, interest), state);
+        if let Some(prev) = prev {
+            // TODO clean up old inodes
         }
     }
 
     pub fn ensure_generated(&mut self, state: &GameState, dynamics: DynamicInterest) {
+        if let Some(phantom) = dynamics.phantom {
+            let mut inodes = self.inner.inode_alloc.allocate();
+
+            // make new phantom dir
+            let phantom_dir = inodes.next().expect("no free inodes"); // should be at least 1
+            self.inner.register(
+                phantom_dir,
+                DirEntry::build().finish().into(),
+                Some((phantom.parent, phantom.child_name)),
+                ChildType::Phantom,
+            );
+
+            // register entries under new phantom dir
+            self.register_dynamic_entries(
+                phantom.dyn_fn,
+                phantom_dir,
+                phantom.interest,
+                Some(inodes),
+                state,
+            );
+        }
+
         for (inode, interest) in dynamics
             .inodes
-            .iter()
-            .filter(|(_, ty)| dynamics.need_fetching.contains(ty))
+            .into_iter()
+            .filter_map(|(inode, ty)| match inode {
+                DynamicInode::Inode(inode) if dynamics.need_fetching.contains(&ty) => {
+                    Some((inode, ty))
+                }
+                _ => None,
+            })
         {
             let dyn_fn = match self
-                .lookup_inode(*inode)
+                .lookup_inode(inode)
                 .and_then(|e| e.as_dir())
                 .and_then(|dir| dir.dynamic)
             {
-                Some((int, dyn_fn)) if int == *interest => dyn_fn,
+                Some((int, dyn_fn)) if int == interest => dyn_fn,
                 _ => {
                     log::warn!("inode {} is not a dynamic dir", inode);
                     continue;
                 }
             };
 
-            let mut registrationer = DynamicDirRegistrationer {
-                inodes: self.inner.inode_alloc.allocate(),
-                entries: Vec::new(),
-                parent: *inode,
-            };
-
-            (dyn_fn)(state, &mut registrationer);
-
-            // register dynamic entries
-            for (new_inode, new_name, new_entry, new_parent) in registrationer.entries {
-                let new_parent = new_parent.unwrap_or(*inode);
-                self.inner
-                    .register(new_inode, new_entry, Some((new_parent, new_name)));
-            }
-
-            let state = DynamicState {
-                inodes: smallvec![registrationer.inodes],
-                time_collected: Instant::now(),
-            };
-
-            let prev = self.inner.dynamic_state.insert(*inode, state);
-            if let Some(prev) = prev {
-                // TODO clean up old inodes
-            }
+            self.register_dynamic_entries(dyn_fn, inode, interest, None, state);
         }
     }
 
@@ -328,9 +449,22 @@ impl FilesystemStructureBuilder {
             .next()
             .expect("exhausted static inodes");
 
-        self.inner.register(inode, entry, parent_info);
+        self.inner
+            .register(inode, entry, parent_info, ChildType::Normal);
 
         inode
+    }
+
+    pub fn add_phantom(
+        &mut self,
+        inode: u64,
+        parse_func: PhantomChildFn,
+        interest_func: PhantomDynamicInterestFn,
+        dyn_func: DynamicDirFn,
+    ) {
+        self.inner
+            .phantom_registry
+            .insert(inode, (parse_func, interest_func, dyn_func));
     }
 
     pub fn finish(self) -> FilesystemStructure {
@@ -344,6 +478,7 @@ impl StructureInner {
         inode: u64,
         entry: Entry,
         parent_info: Option<(u64, impl Into<Cow<'static, str>>)>,
+        ty: ChildType,
     ) {
         self.registry.insert(inode, entry);
 
@@ -355,20 +490,26 @@ impl StructureInner {
                 parent,
                 name
             );
-            self.add_child_to_parent(parent, name, inode)
+            self.add_child_to_parent(parent, name, inode, ty)
         } else {
             trace!("registered inode {}", inode);
         }
     }
 
-    fn add_child_to_parent(&mut self, parent: u64, child_name: Cow<'static, str>, child: u64) {
+    fn add_child_to_parent(
+        &mut self,
+        parent: u64,
+        child_name: Cow<'static, str>,
+        child: u64,
+        ty: ChildType,
+    ) {
         use std::collections::hash_map::Entry;
         let children = match self.child_registry.entry(parent) {
             Entry::Occupied(entries) => entries.into_mut(),
             Entry::Vacant(entry) => entry.insert(Vec::new()),
         };
 
-        children.push((child, child_name));
+        children.push((child, ty, child_name));
 
         if self.parent_registry.insert(child, parent).is_some() {
             panic!("multiple parents for child {}", child);

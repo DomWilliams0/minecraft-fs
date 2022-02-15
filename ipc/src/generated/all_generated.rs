@@ -118,18 +118,20 @@ pub mod mcfs {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_COMMAND_TYPE: i32 = 7;
+    pub const ENUM_MAX_COMMAND_TYPE: i32 = 9;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 8] = [
+    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 10] = [
         CommandType::PlayerName,
         CommandType::EntityType,
         CommandType::EntityPosition,
         CommandType::EntityHealth,
         CommandType::WorldTime,
+        CommandType::BlockType,
+        CommandType::BlockColor,
         CommandType::ControlSay,
         CommandType::ControlJump,
         CommandType::ControlMove,
@@ -145,18 +147,22 @@ pub mod mcfs {
         pub const EntityPosition: Self = Self(2);
         pub const EntityHealth: Self = Self(3);
         pub const WorldTime: Self = Self(4);
-        pub const ControlSay: Self = Self(5);
-        pub const ControlJump: Self = Self(6);
-        pub const ControlMove: Self = Self(7);
+        pub const BlockType: Self = Self(5);
+        pub const BlockColor: Self = Self(6);
+        pub const ControlSay: Self = Self(7);
+        pub const ControlJump: Self = Self(8);
+        pub const ControlMove: Self = Self(9);
 
         pub const ENUM_MIN: i32 = 0;
-        pub const ENUM_MAX: i32 = 7;
+        pub const ENUM_MAX: i32 = 9;
         pub const ENUM_VALUES: &'static [Self] = &[
             Self::PlayerName,
             Self::EntityType,
             Self::EntityPosition,
             Self::EntityHealth,
             Self::WorldTime,
+            Self::BlockType,
+            Self::BlockColor,
             Self::ControlSay,
             Self::ControlJump,
             Self::ControlMove,
@@ -169,6 +175,8 @@ pub mod mcfs {
                 Self::EntityPosition => Some("EntityPosition"),
                 Self::EntityHealth => Some("EntityHealth"),
                 Self::WorldTime => Some("WorldTime"),
+                Self::BlockType => Some("BlockType"),
+                Self::BlockColor => Some("BlockColor"),
                 Self::ControlSay => Some("ControlSay"),
                 Self::ControlJump => Some("ControlJump"),
                 Self::ControlMove => Some("ControlMove"),
@@ -687,6 +695,257 @@ pub mod mcfs {
         }
     }
 
+    // struct BlockPos, aligned to 4
+    #[repr(transparent)]
+    #[derive(Clone, Copy, PartialEq)]
+    pub struct BlockPos(pub [u8; 12]);
+    impl Default for BlockPos {
+        fn default() -> Self {
+            Self([0; 12])
+        }
+    }
+    impl std::fmt::Debug for BlockPos {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.debug_struct("BlockPos")
+                .field("x", &self.x())
+                .field("y", &self.y())
+                .field("z", &self.z())
+                .finish()
+        }
+    }
+
+    impl flatbuffers::SimpleToVerifyInSlice for BlockPos {}
+    impl flatbuffers::SafeSliceAccess for BlockPos {}
+    impl<'a> flatbuffers::Follow<'a> for BlockPos {
+        type Inner = &'a BlockPos;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            <&'a BlockPos>::follow(buf, loc)
+        }
+    }
+    impl<'a> flatbuffers::Follow<'a> for &'a BlockPos {
+        type Inner = &'a BlockPos;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            flatbuffers::follow_cast_ref::<BlockPos>(buf, loc)
+        }
+    }
+    impl<'b> flatbuffers::Push for BlockPos {
+        type Output = BlockPos;
+        #[inline]
+        fn push(&self, dst: &mut [u8], _rest: &[u8]) {
+            let src = unsafe {
+                ::std::slice::from_raw_parts(self as *const BlockPos as *const u8, Self::size())
+            };
+            dst.copy_from_slice(src);
+        }
+    }
+    impl<'b> flatbuffers::Push for &'b BlockPos {
+        type Output = BlockPos;
+
+        #[inline]
+        fn push(&self, dst: &mut [u8], _rest: &[u8]) {
+            let src = unsafe {
+                ::std::slice::from_raw_parts(*self as *const BlockPos as *const u8, Self::size())
+            };
+            dst.copy_from_slice(src);
+        }
+    }
+
+    impl<'a> flatbuffers::Verifiable for BlockPos {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.in_buffer::<Self>(pos)
+        }
+    }
+    impl<'a> BlockPos {
+        #[allow(clippy::too_many_arguments)]
+        pub fn new(x: i32, y: i32, z: i32) -> Self {
+            let mut s = Self([0; 12]);
+            s.set_x(x);
+            s.set_y(y);
+            s.set_z(z);
+            s
+        }
+
+        pub fn x(&self) -> i32 {
+            let mut mem = core::mem::MaybeUninit::<i32>::uninit();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    self.0[0..].as_ptr(),
+                    mem.as_mut_ptr() as *mut u8,
+                    core::mem::size_of::<i32>(),
+                );
+                mem.assume_init()
+            }
+            .from_little_endian()
+        }
+
+        pub fn set_x(&mut self, x: i32) {
+            let x_le = x.to_little_endian();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &x_le as *const i32 as *const u8,
+                    self.0[0..].as_mut_ptr(),
+                    core::mem::size_of::<i32>(),
+                );
+            }
+        }
+
+        pub fn y(&self) -> i32 {
+            let mut mem = core::mem::MaybeUninit::<i32>::uninit();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    self.0[4..].as_ptr(),
+                    mem.as_mut_ptr() as *mut u8,
+                    core::mem::size_of::<i32>(),
+                );
+                mem.assume_init()
+            }
+            .from_little_endian()
+        }
+
+        pub fn set_y(&mut self, x: i32) {
+            let x_le = x.to_little_endian();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &x_le as *const i32 as *const u8,
+                    self.0[4..].as_mut_ptr(),
+                    core::mem::size_of::<i32>(),
+                );
+            }
+        }
+
+        pub fn z(&self) -> i32 {
+            let mut mem = core::mem::MaybeUninit::<i32>::uninit();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    self.0[8..].as_ptr(),
+                    mem.as_mut_ptr() as *mut u8,
+                    core::mem::size_of::<i32>(),
+                );
+                mem.assume_init()
+            }
+            .from_little_endian()
+        }
+
+        pub fn set_z(&mut self, x: i32) {
+            let x_le = x.to_little_endian();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &x_le as *const i32 as *const u8,
+                    self.0[8..].as_mut_ptr(),
+                    core::mem::size_of::<i32>(),
+                );
+            }
+        }
+    }
+
+    // struct BlockDetails, aligned to 1
+    #[repr(transparent)]
+    #[derive(Clone, Copy, PartialEq)]
+    pub struct BlockDetails(pub [u8; 1]);
+    impl Default for BlockDetails {
+        fn default() -> Self {
+            Self([0; 1])
+        }
+    }
+    impl std::fmt::Debug for BlockDetails {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.debug_struct("BlockDetails")
+                .field("has_color", &self.has_color())
+                .finish()
+        }
+    }
+
+    impl flatbuffers::SimpleToVerifyInSlice for BlockDetails {}
+    impl flatbuffers::SafeSliceAccess for BlockDetails {}
+    impl<'a> flatbuffers::Follow<'a> for BlockDetails {
+        type Inner = &'a BlockDetails;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            <&'a BlockDetails>::follow(buf, loc)
+        }
+    }
+    impl<'a> flatbuffers::Follow<'a> for &'a BlockDetails {
+        type Inner = &'a BlockDetails;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            flatbuffers::follow_cast_ref::<BlockDetails>(buf, loc)
+        }
+    }
+    impl<'b> flatbuffers::Push for BlockDetails {
+        type Output = BlockDetails;
+        #[inline]
+        fn push(&self, dst: &mut [u8], _rest: &[u8]) {
+            let src = unsafe {
+                ::std::slice::from_raw_parts(self as *const BlockDetails as *const u8, Self::size())
+            };
+            dst.copy_from_slice(src);
+        }
+    }
+    impl<'b> flatbuffers::Push for &'b BlockDetails {
+        type Output = BlockDetails;
+
+        #[inline]
+        fn push(&self, dst: &mut [u8], _rest: &[u8]) {
+            let src = unsafe {
+                ::std::slice::from_raw_parts(
+                    *self as *const BlockDetails as *const u8,
+                    Self::size(),
+                )
+            };
+            dst.copy_from_slice(src);
+        }
+    }
+
+    impl<'a> flatbuffers::Verifiable for BlockDetails {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.in_buffer::<Self>(pos)
+        }
+    }
+    impl<'a> BlockDetails {
+        #[allow(clippy::too_many_arguments)]
+        pub fn new(has_color: bool) -> Self {
+            let mut s = Self([0; 1]);
+            s.set_has_color(has_color);
+            s
+        }
+
+        pub fn has_color(&self) -> bool {
+            let mut mem = core::mem::MaybeUninit::<bool>::uninit();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    self.0[0..].as_ptr(),
+                    mem.as_mut_ptr() as *mut u8,
+                    core::mem::size_of::<bool>(),
+                );
+                mem.assume_init()
+            }
+            .from_little_endian()
+        }
+
+        pub fn set_has_color(&mut self, x: bool) {
+            let x_le = x.to_little_endian();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &x_le as *const bool as *const u8,
+                    self.0[0..].as_mut_ptr(),
+                    core::mem::size_of::<bool>(),
+                );
+            }
+        }
+    }
+
     pub enum WriteBodyOffset {}
     #[derive(Copy, Clone, PartialEq)]
 
@@ -709,6 +968,7 @@ pub mod mcfs {
         pub const VT_INT: flatbuffers::VOffsetT = 6;
         pub const VT_STRING: flatbuffers::VOffsetT = 8;
         pub const VT_VEC: flatbuffers::VOffsetT = 10;
+        pub const VT_BLOCK: flatbuffers::VOffsetT = 12;
 
         #[inline]
         pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -720,6 +980,9 @@ pub mod mcfs {
             args: &'args WriteBodyArgs<'args>,
         ) -> flatbuffers::WIPOffset<WriteBody<'bldr>> {
             let mut builder = WriteBodyBuilder::new(_fbb);
+            if let Some(x) = args.block {
+                builder.add_block(x);
+            }
             if let Some(x) = args.vec {
                 builder.add_vec(x);
             }
@@ -752,6 +1015,10 @@ pub mod mcfs {
         pub fn vec(&self) -> Option<&'a Vec3> {
             self._tab.get::<Vec3>(WriteBody::VT_VEC, None)
         }
+        #[inline]
+        pub fn block(&self) -> Option<&'a BlockPos> {
+            self._tab.get::<BlockPos>(WriteBody::VT_BLOCK, None)
+        }
     }
 
     impl flatbuffers::Verifiable for WriteBody<'_> {
@@ -770,6 +1037,7 @@ pub mod mcfs {
                     false,
                 )?
                 .visit_field::<Vec3>("vec", Self::VT_VEC, false)?
+                .visit_field::<BlockPos>("block", Self::VT_BLOCK, false)?
                 .finish();
             Ok(())
         }
@@ -779,6 +1047,7 @@ pub mod mcfs {
         pub int: Option<i32>,
         pub string: Option<flatbuffers::WIPOffset<&'a str>>,
         pub vec: Option<&'a Vec3>,
+        pub block: Option<&'a BlockPos>,
     }
     impl<'a> Default for WriteBodyArgs<'a> {
         #[inline]
@@ -788,6 +1057,7 @@ pub mod mcfs {
                 int: None,
                 string: None,
                 vec: None,
+                block: None,
             }
         }
     }
@@ -815,6 +1085,11 @@ pub mod mcfs {
             self.fbb_.push_slot_always::<&Vec3>(WriteBody::VT_VEC, vec);
         }
         #[inline]
+        pub fn add_block(&mut self, block: &BlockPos) {
+            self.fbb_
+                .push_slot_always::<&BlockPos>(WriteBody::VT_BLOCK, block);
+        }
+        #[inline]
         pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> WriteBodyBuilder<'a, 'b> {
             let start = _fbb.start_table();
             WriteBodyBuilder {
@@ -836,6 +1111,7 @@ pub mod mcfs {
             ds.field("int", &self.int());
             ds.field("string", &self.string());
             ds.field("vec", &self.vec());
+            ds.field("block", &self.block());
             ds.finish()
         }
     }
@@ -861,7 +1137,8 @@ pub mod mcfs {
         pub const VT_TARGET_ENTITY: flatbuffers::VOffsetT = 6;
         pub const VT_TARGET_PLAYER_ENTITY: flatbuffers::VOffsetT = 8;
         pub const VT_TARGET_WORLD: flatbuffers::VOffsetT = 10;
-        pub const VT_WRITE: flatbuffers::VOffsetT = 12;
+        pub const VT_TARGET_BLOCK: flatbuffers::VOffsetT = 12;
+        pub const VT_WRITE: flatbuffers::VOffsetT = 14;
 
         #[inline]
         pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -875,6 +1152,9 @@ pub mod mcfs {
             let mut builder = CommandBuilder::new(_fbb);
             if let Some(x) = args.write {
                 builder.add_write(x);
+            }
+            if let Some(x) = args.target_block {
+                builder.add_target_block(x);
             }
             if let Some(x) = args.target_entity {
                 builder.add_target_entity(x);
@@ -908,6 +1188,10 @@ pub mod mcfs {
             self._tab.get::<Dimension>(Command::VT_TARGET_WORLD, None)
         }
         #[inline]
+        pub fn target_block(&self) -> Option<&'a BlockPos> {
+            self._tab.get::<BlockPos>(Command::VT_TARGET_BLOCK, None)
+        }
+        #[inline]
         pub fn write(&self) -> Option<WriteBody<'a>> {
             self._tab
                 .get::<flatbuffers::ForwardsUOffset<WriteBody>>(Command::VT_WRITE, None)
@@ -926,6 +1210,7 @@ pub mod mcfs {
                 .visit_field::<i32>("target_entity", Self::VT_TARGET_ENTITY, false)?
                 .visit_field::<bool>("target_player_entity", Self::VT_TARGET_PLAYER_ENTITY, false)?
                 .visit_field::<Dimension>("target_world", Self::VT_TARGET_WORLD, false)?
+                .visit_field::<BlockPos>("target_block", Self::VT_TARGET_BLOCK, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<WriteBody>>(
                     "write",
                     Self::VT_WRITE,
@@ -940,6 +1225,7 @@ pub mod mcfs {
         pub target_entity: Option<i32>,
         pub target_player_entity: bool,
         pub target_world: Option<Dimension>,
+        pub target_block: Option<&'a BlockPos>,
         pub write: Option<flatbuffers::WIPOffset<WriteBody<'a>>>,
     }
     impl<'a> Default for CommandArgs<'a> {
@@ -950,6 +1236,7 @@ pub mod mcfs {
                 target_entity: None,
                 target_player_entity: false,
                 target_world: None,
+                target_block: None,
                 write: None,
             }
         }
@@ -983,6 +1270,11 @@ pub mod mcfs {
                 .push_slot_always::<Dimension>(Command::VT_TARGET_WORLD, target_world);
         }
         #[inline]
+        pub fn add_target_block(&mut self, target_block: &BlockPos) {
+            self.fbb_
+                .push_slot_always::<&BlockPos>(Command::VT_TARGET_BLOCK, target_block);
+        }
+        #[inline]
         pub fn add_write(&mut self, write: flatbuffers::WIPOffset<WriteBody<'b>>) {
             self.fbb_
                 .push_slot_always::<flatbuffers::WIPOffset<WriteBody>>(Command::VT_WRITE, write);
@@ -1009,6 +1301,7 @@ pub mod mcfs {
             ds.field("target_entity", &self.target_entity());
             ds.field("target_player_entity", &self.target_player_entity());
             ds.field("target_world", &self.target_world());
+            ds.field("target_block", &self.target_block());
             ds.field("write", &self.write());
             ds.finish()
         }
@@ -1033,6 +1326,7 @@ pub mod mcfs {
     impl<'a> StateRequest<'a> {
         pub const VT_ENTITIES_BY_ID: flatbuffers::VOffsetT = 4;
         pub const VT_TARGET_WORLD: flatbuffers::VOffsetT = 6;
+        pub const VT_TARGET_BLOCK: flatbuffers::VOffsetT = 8;
 
         #[inline]
         pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -1041,9 +1335,12 @@ pub mod mcfs {
         #[allow(unused_mut)]
         pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
             _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
-            args: &'args StateRequestArgs,
+            args: &'args StateRequestArgs<'args>,
         ) -> flatbuffers::WIPOffset<StateRequest<'bldr>> {
             let mut builder = StateRequestBuilder::new(_fbb);
+            if let Some(x) = args.target_block {
+                builder.add_target_block(x);
+            }
             if let Some(x) = args.target_world {
                 builder.add_target_world(x);
             }
@@ -1062,6 +1359,11 @@ pub mod mcfs {
             self._tab
                 .get::<Dimension>(StateRequest::VT_TARGET_WORLD, None)
         }
+        #[inline]
+        pub fn target_block(&self) -> Option<&'a BlockPos> {
+            self._tab
+                .get::<BlockPos>(StateRequest::VT_TARGET_BLOCK, None)
+        }
     }
 
     impl flatbuffers::Verifiable for StateRequest<'_> {
@@ -1074,20 +1376,23 @@ pub mod mcfs {
             v.visit_table(pos)?
                 .visit_field::<bool>("entities_by_id", Self::VT_ENTITIES_BY_ID, false)?
                 .visit_field::<Dimension>("target_world", Self::VT_TARGET_WORLD, false)?
+                .visit_field::<BlockPos>("target_block", Self::VT_TARGET_BLOCK, false)?
                 .finish();
             Ok(())
         }
     }
-    pub struct StateRequestArgs {
+    pub struct StateRequestArgs<'a> {
         pub entities_by_id: bool,
         pub target_world: Option<Dimension>,
+        pub target_block: Option<&'a BlockPos>,
     }
-    impl<'a> Default for StateRequestArgs {
+    impl<'a> Default for StateRequestArgs<'a> {
         #[inline]
         fn default() -> Self {
             StateRequestArgs {
                 entities_by_id: false,
                 target_world: None,
+                target_block: None,
             }
         }
     }
@@ -1105,6 +1410,11 @@ pub mod mcfs {
         pub fn add_target_world(&mut self, target_world: Dimension) {
             self.fbb_
                 .push_slot_always::<Dimension>(StateRequest::VT_TARGET_WORLD, target_world);
+        }
+        #[inline]
+        pub fn add_target_block(&mut self, target_block: &BlockPos) {
+            self.fbb_
+                .push_slot_always::<&BlockPos>(StateRequest::VT_TARGET_BLOCK, target_block);
         }
         #[inline]
         pub fn new(
@@ -1128,6 +1438,7 @@ pub mod mcfs {
             let mut ds = f.debug_struct("StateRequest");
             ds.field("entities_by_id", &self.entities_by_id());
             ds.field("target_world", &self.target_world());
+            ds.field("target_block", &self.target_block());
             ds.finish()
         }
     }
@@ -1508,6 +1819,7 @@ pub mod mcfs {
         pub const VT_PLAYER_ENTITY_ID: flatbuffers::VOffsetT = 4;
         pub const VT_PLAYER_WORLD: flatbuffers::VOffsetT = 6;
         pub const VT_ENTITY_IDS: flatbuffers::VOffsetT = 8;
+        pub const VT_BLOCK: flatbuffers::VOffsetT = 10;
 
         #[inline]
         pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -1519,6 +1831,9 @@ pub mod mcfs {
             args: &'args StateResponseArgs<'args>,
         ) -> flatbuffers::WIPOffset<StateResponse<'bldr>> {
             let mut builder = StateResponseBuilder::new(_fbb);
+            if let Some(x) = args.block {
+                builder.add_block(x);
+            }
             if let Some(x) = args.entity_ids {
                 builder.add_entity_ids(x);
             }
@@ -1549,6 +1864,10 @@ pub mod mcfs {
                     None,
                 )
         }
+        #[inline]
+        pub fn block(&self) -> Option<&'a BlockDetails> {
+            self._tab.get::<BlockDetails>(StateResponse::VT_BLOCK, None)
+        }
     }
 
     impl flatbuffers::Verifiable for StateResponse<'_> {
@@ -1566,6 +1885,7 @@ pub mod mcfs {
                     Self::VT_ENTITY_IDS,
                     false,
                 )?
+                .visit_field::<BlockDetails>("block", Self::VT_BLOCK, false)?
                 .finish();
             Ok(())
         }
@@ -1574,6 +1894,7 @@ pub mod mcfs {
         pub player_entity_id: Option<i32>,
         pub player_world: Option<Dimension>,
         pub entity_ids: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, i32>>>,
+        pub block: Option<&'a BlockDetails>,
     }
     impl<'a> Default for StateResponseArgs<'a> {
         #[inline]
@@ -1582,6 +1903,7 @@ pub mod mcfs {
                 player_entity_id: None,
                 player_world: None,
                 entity_ids: None,
+                block: None,
             }
         }
     }
@@ -1611,6 +1933,11 @@ pub mod mcfs {
             );
         }
         #[inline]
+        pub fn add_block(&mut self, block: &BlockDetails) {
+            self.fbb_
+                .push_slot_always::<&BlockDetails>(StateResponse::VT_BLOCK, block);
+        }
+        #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>,
         ) -> StateResponseBuilder<'a, 'b> {
@@ -1633,6 +1960,7 @@ pub mod mcfs {
             ds.field("player_entity_id", &self.player_entity_id());
             ds.field("player_world", &self.player_world());
             ds.field("entity_ids", &self.entity_ids());
+            ds.field("block", &self.block());
             ds.finish()
         }
     }

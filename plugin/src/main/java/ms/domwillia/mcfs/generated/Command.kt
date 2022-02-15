@@ -37,9 +37,18 @@ class Command : Table() {
             val o = __offset(10)
             return if(o != 0) bb.get(o + bb_pos).toUByte() else null
         }
+    val targetBlock : MCFS.BlockPos? get() = targetBlock(MCFS.BlockPos())
+    fun targetBlock(obj: MCFS.BlockPos) : MCFS.BlockPos? {
+        val o = __offset(12)
+        return if (o != 0) {
+            obj.__assign(o + bb_pos, bb)
+        } else {
+            null
+        }
+    }
     val write : MCFS.WriteBody? get() = write(MCFS.WriteBody())
     fun write(obj: MCFS.WriteBody) : MCFS.WriteBody? {
-        val o = __offset(12)
+        val o = __offset(14)
         return if (o != 0) {
             obj.__assign(__indirect(o + bb_pos), bb)
         } else {
@@ -53,21 +62,13 @@ class Command : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createCommand(builder: FlatBufferBuilder, cmd: Int, targetEntity: Int?, targetPlayerEntity: Boolean, targetWorld: UByte?, writeOffset: Int) : Int {
-            builder.startTable(5)
-            addWrite(builder, writeOffset)
-            targetEntity?.run { addTargetEntity(builder, targetEntity) }
-            addCmd(builder, cmd)
-            targetWorld?.run { addTargetWorld(builder, targetWorld) }
-            addTargetPlayerEntity(builder, targetPlayerEntity)
-            return endCommand(builder)
-        }
-        fun startCommand(builder: FlatBufferBuilder) = builder.startTable(5)
+        fun startCommand(builder: FlatBufferBuilder) = builder.startTable(6)
         fun addCmd(builder: FlatBufferBuilder, cmd: Int) = builder.addInt(0, cmd, 0)
         fun addTargetEntity(builder: FlatBufferBuilder, targetEntity: Int) = builder.addInt(1, targetEntity, 0)
         fun addTargetPlayerEntity(builder: FlatBufferBuilder, targetPlayerEntity: Boolean) = builder.addBoolean(2, targetPlayerEntity, false)
         fun addTargetWorld(builder: FlatBufferBuilder, targetWorld: UByte) = builder.addByte(3, targetWorld.toByte(), 0)
-        fun addWrite(builder: FlatBufferBuilder, write: Int) = builder.addOffset(4, write, 0)
+        fun addTargetBlock(builder: FlatBufferBuilder, targetBlock: Int) = builder.addStruct(4, targetBlock, 0)
+        fun addWrite(builder: FlatBufferBuilder, write: Int) = builder.addOffset(5, write, 0)
         fun endCommand(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
             return o
