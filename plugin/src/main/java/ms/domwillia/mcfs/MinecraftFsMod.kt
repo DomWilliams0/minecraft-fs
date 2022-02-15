@@ -6,22 +6,30 @@ import org.apache.logging.log4j.LogManager
 import java.io.IOException
 
 class MinecraftFsMod : ModInitializer {
-    override fun onInitialize() = try {
-        val ipc = IpcChannel()
 
+
+    override fun onInitialize() = try {
         // close on shutdown
         Runtime.getRuntime().addShutdownHook(Thread {
             try {
-                ipc.close()
+                IPC?.close()
             } catch (e: IOException) {
                 LOGGER.catching(e)
             }
         })
 
-        // run command processing on a new thread
-        val t = Thread(ipc)
-        t.isDaemon = true
-        t.start()
+        val watchdog = Thread {
+            while (true) {
+                LOGGER.info("Initialising IPC")
+                val thread = reinit()
+
+                while (thread.isAlive) {
+                    Thread.sleep(1000)
+                }
+            }
+        }
+        watchdog.isDaemon = true
+        watchdog.start()
 
 
     } catch (e: IOException) {
@@ -31,5 +39,17 @@ class MinecraftFsMod : ModInitializer {
 
     companion object {
         val LOGGER = LogManager.getLogger("mcfs")!!
+        var IPC: IpcChannel? = null
+
+        fun reinit(): Thread {
+            IPC = IpcChannel()
+
+            // run command processing on a new thread
+            val t = Thread(IPC)
+            t.isDaemon = true
+            t.start()
+
+            return t
+        }
     }
 }
