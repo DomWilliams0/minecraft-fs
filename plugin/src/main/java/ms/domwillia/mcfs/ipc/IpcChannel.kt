@@ -22,6 +22,7 @@ class IpcChannel : Runnable {
 
     @ExperimentalUnsignedTypes
     override fun run() {
+        val lenBuf = ByteBuffer.wrap(ByteArray(4)).order(ByteOrder.LITTLE_ENDIAN)
         val buf = ByteBuffer.allocate(8192)
         val responseBuilder = FlatBufferBuilder(8192)
         val executor = Executor(responseBuilder)
@@ -31,24 +32,36 @@ class IpcChannel : Runnable {
                 client = channel.accept()
 
                 while (true) {
-                    buf.order(ByteOrder.LITTLE_ENDIAN)
-                    buf.clear()
-                    client.read(buf)
+                    // read len
+                    client.read(lenBuf.clear())
+                    val len = lenBuf.flip().int
+                    MinecraftFsMod.LOGGER.info("Reading $len bytes")
+
+                    // read data
+                    client.read(
+                        buf.clear()
+                            .order(ByteOrder.LITTLE_ENDIAN)
+                            .limit(len)
+                    )
                     buf.rewind()
 
-                    val len = buf.int
-                    MinecraftFsMod.LOGGER.info("Reading $len bytes")
+                    // log bytes
+                    // MinecraftFsMod.LOGGER.info(buf.array().copyOf(len).joinToString() { b -> "%02x".format(b) })
 
                     val request = GameRequest.getRootAsGameRequest(buf);
                     val response = executor.execute(request)
 
                     val responseSize = response.remaining()
-                    buf.clear();
-                    buf.order(ByteOrder.LITTLE_ENDIAN)
-                    buf.putInt(responseSize)
-                    buf.put(response)
-                    buf.flip()
+                    buf.clear()
+                        .order(ByteOrder.LITTLE_ENDIAN)
+                        .putInt(responseSize)
+                        .put(response)
+                        .flip()
+
                     MinecraftFsMod.LOGGER.info("Writing $responseSize bytes")
+
+                    // log bytes
+                    // MinecraftFsMod.LOGGER.info(buf.array().copyOf(responseSize).joinToString() { b -> "%02x".format(b) })
                     client.write(buf)
                 }
             } catch (e: Exception) {
