@@ -4,7 +4,6 @@ import MCFS.*
 import com.google.flatbuffers.FlatBufferBuilder
 import ms.domwillia.mcfs.MinecraftFsMod
 import net.minecraft.block.Block
-import net.minecraft.block.Blocks
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.network.ClientPlayerEntity
 import net.minecraft.entity.Entity
@@ -77,7 +76,7 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
             }
 
             else -> {
-                MinecraftFsMod.LOGGER.error("invalid request type");
+                MinecraftFsMod.LOGGER.error("Invalid request type");
                 throw NullPointerException()
             }
         }
@@ -113,7 +112,7 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
             }
             CommandType.EntityPosition -> {
                 val value = command.rwPos()
-                val entity = getTargetLivingEntity(command)
+                val entity = getTargetEntity(command)
                 if (value == null) {
                     mkPosition(entity.pos)
                 } else {
@@ -189,12 +188,16 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
         val player = server?.thePlayerOpt
         val world = req.targetWorld?.let(this::resolveWorld)
 
-        val entityIds = if (world != null && req.entitiesById) {
-            val bounds = -10_000.0
+        val entities = if (world != null && req.entitiesById) {
+            val bounds = -100_000.0
             val box = Box(Vec3d(-bounds, -bounds, -bounds), Vec3d(bounds, bounds, bounds))
             val entities = world.getOtherEntities(null, box)
 
-            StateResponse.createEntityIdsVector(responseBuilder, entities.map { e -> e.id }.toIntArray())
+            StateResponse.startEntitiesVector(responseBuilder, entities.size)
+            for (e in entities) {
+                EntityDetails.createEntityDetails(responseBuilder, e.id, e.isLiving, e.isAlive)
+            }
+            responseBuilder.endVector()
         } else {
             null
         }
@@ -221,8 +224,8 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
             )
         }
 
-        if (entityIds != null) {
-            StateResponse.addEntityIds(responseBuilder, entityIds)
+        if (entities != null) {
+            StateResponse.addEntities(responseBuilder, entities)
         }
 
         if (block != null) {

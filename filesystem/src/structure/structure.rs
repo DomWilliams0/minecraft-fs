@@ -1,4 +1,4 @@
-use ipc::generated::{CommandType, Dimension};
+use ipc::generated::{CommandType, Dimension, EntityDetails};
 use ipc::BodyType;
 use ipc::BodyType::*;
 
@@ -7,7 +7,6 @@ use crate::structure::registry::{
     DynamicDirRegistrationer, DynamicStateType, FilesystemStructureBuilder, LinkEntry,
     PhantomChildType,
 };
-
 use crate::structure::FileBehaviour::*;
 use crate::structure::{
     DirEntry, EntryAssociatedData, FileBehaviour, FileEntry, FilesystemStructure,
@@ -24,6 +23,11 @@ pub fn create_structure() -> FilesystemStructure {
     builder.finish()
 }
 
+enum EntityType<'a> {
+    SpecificallyPlayer,
+    Other(&'a EntityDetails),
+}
+
 fn player_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
     let dir = builder.add_entry(
         builder.root(),
@@ -31,7 +35,7 @@ fn player_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
         DirEntry::build()
             .associated_data(EntryAssociatedData::PlayerId)
             .dynamic(DynamicStateType::PlayerId, |_, reg| {
-                mk_entity_dir(reg, reg.parent(), false);
+                mk_entity_dir(reg, reg.parent(), EntityType::SpecificallyPlayer);
             })
             .finish(),
     );
@@ -224,15 +228,16 @@ fn entities_dir(builder: &mut FilesystemStructureBuilder, root: u64) -> u64 {
         "by-id",
         DirEntry::build()
             .dynamic(DynamicStateType::EntityIds, |state, reg| {
-                for id in &state.entity_ids {
+                for details in &state.entities {
+                    let id = details.id();
                     let entity_dir = reg.add_root_entry(
                         id.to_string(),
                         DirEntry::build()
-                            .associated_data(EntryAssociatedData::EntityId(*id))
+                            .associated_data(EntryAssociatedData::EntityId(id))
                             .finish(),
                     );
 
-                    mk_entity_dir(reg, entity_dir, true);
+                    mk_entity_dir(reg, entity_dir, EntityType::Other(details));
                 }
             })
             .finish(),
@@ -240,7 +245,7 @@ fn entities_dir(builder: &mut FilesystemStructureBuilder, root: u64) -> u64 {
     dir
 }
 
-fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, generic: bool) {
+fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, ty: EntityType) {
     reg.add_entry(
         entity_dir,
         "health",
@@ -256,7 +261,7 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, generic: b
             .finish(),
     );
 
-    if generic {
+    if let EntityType::Other(details) = ty {
         reg.add_entry(
             entity_dir,
             "type",
@@ -264,6 +269,26 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, generic: b
                 .behaviour(ReadOnly(CommandType::EntityType, String))
                 .finish(),
         );
+
+        if details.living() {
+            reg.add_entry(
+                entity_dir,
+                "living",
+                FileEntry::build()
+                    .behaviour(FileBehaviour::ForShow)
+                    .finish(),
+            );
+        }
+
+        if details.alive() {
+            reg.add_entry(
+                entity_dir,
+                "alive",
+                FileEntry::build()
+                    .behaviour(FileBehaviour::ForShow)
+                    .finish(),
+            );
+        }
     }
 }
 

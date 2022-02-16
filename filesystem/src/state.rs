@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime};
 
 use log::{debug, trace};
 
-use ipc::generated::{BlockPos, Dimension, StateRequestArgs};
+use ipc::generated::{BlockPos, Dimension, EntityDetails, StateRequestArgs};
 use ipc::{IpcChannel, IpcError};
 
 const CACHE_TIME: Duration = Duration::from_millis(500);
@@ -12,7 +12,7 @@ const CACHE_TIME: Duration = Duration::from_millis(500);
 pub struct GameState {
     pub player_entity_id: Option<i32>,
     pub player_world: Option<Dimension>,
-    pub entity_ids: Vec<i32>,
+    pub entities: Vec<EntityDetails>,
     pub block: Option<BlockDetails>,
 }
 
@@ -93,9 +93,9 @@ impl CachedGameState {
             self.state = GameState {
                 player_entity_id: response.player_entity_id(),
                 player_world: response.player_world(),
-                entity_ids: response
-                    .entity_ids()
-                    .map(|v| v.into_iter().collect())
+                entities: response
+                    .entities()
+                    .map(|v| v.into_iter().copied().collect())
                     .unwrap_or_default(),
                 block: response.block().map(|b| BlockDetails {
                     has_color: b.has_color(),

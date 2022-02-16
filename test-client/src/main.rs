@@ -1,13 +1,16 @@
 use std::borrow::Cow;
 use std::error::Error as StdError;
+use std::iter::once;
 
 use flatbuffers::FlatBufferBuilder;
 use log::*;
+use rand::prelude::IteratorRandom;
+use rand::{thread_rng, Rng};
 
 use ipc::generated::{
-    BlockDetails, BlockDetailsArgs, Command, CommandType, Dimension, Error, GameResponse,
-    GameResponseArgs, GameResponseBody, Response, ResponseArgs, StateResponse, StateResponseArgs,
-    Vec3,
+    BlockDetails, BlockDetailsArgs, Command, CommandType, Dimension, EntityDetails, Error,
+    GameResponse, GameResponseArgs, GameResponseBody, Response, ResponseArgs, StateResponse,
+    StateResponseArgs, Vec3,
 };
 use ipc::{ConnectedIpcClient, IpcClient, IpcError};
 
@@ -113,10 +116,22 @@ fn handle_client(mut client: ConnectedIpcClient) -> Result<(), Box<dyn StdError>
                     None
                 };
 
+                let mut rand = thread_rng();
+                let n = rand.gen_range(3..10);
+                let entities = once(EntityDetails::new(0, true, true))
+                    .chain((1usize..n).map(|_| {
+                        EntityDetails::new(
+                            rand.gen_range(1..100),
+                            rand.gen_bool(0.5),
+                            rand.gen_bool(0.9),
+                        )
+                    }))
+                    .collect::<Vec<_>>();
+
                 let state = StateResponseArgs {
                     player_entity_id: Some(0),
                     player_world: Some(Dimension::Overworld),
-                    entity_ids: Some(buf.create_vector_direct(&[0, 1, 2, 3, 4, 5])),
+                    entities: Some(buf.create_vector_direct(&entities)),
                     block,
                 };
                 StateResponse::create(&mut buf, &state).as_union_value()

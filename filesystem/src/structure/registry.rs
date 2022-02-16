@@ -118,6 +118,8 @@ pub enum FileBehaviour {
     ReadWrite(CommandType, BodyType),
     // TODO rw with different types
     Static(&'static str),
+    /// Not readable or writable
+    ForShow,
 }
 
 pub enum EntryAssociatedData {

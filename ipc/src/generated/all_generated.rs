@@ -849,6 +849,162 @@ pub mod mcfs {
         }
     }
 
+    // struct EntityDetails, aligned to 4
+    #[repr(transparent)]
+    #[derive(Clone, Copy, PartialEq)]
+    pub struct EntityDetails(pub [u8; 8]);
+    impl Default for EntityDetails {
+        fn default() -> Self {
+            Self([0; 8])
+        }
+    }
+    impl std::fmt::Debug for EntityDetails {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.debug_struct("EntityDetails")
+                .field("id", &self.id())
+                .field("living", &self.living())
+                .field("alive", &self.alive())
+                .finish()
+        }
+    }
+
+    impl flatbuffers::SimpleToVerifyInSlice for EntityDetails {}
+    impl flatbuffers::SafeSliceAccess for EntityDetails {}
+    impl<'a> flatbuffers::Follow<'a> for EntityDetails {
+        type Inner = &'a EntityDetails;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            <&'a EntityDetails>::follow(buf, loc)
+        }
+    }
+    impl<'a> flatbuffers::Follow<'a> for &'a EntityDetails {
+        type Inner = &'a EntityDetails;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            flatbuffers::follow_cast_ref::<EntityDetails>(buf, loc)
+        }
+    }
+    impl<'b> flatbuffers::Push for EntityDetails {
+        type Output = EntityDetails;
+        #[inline]
+        fn push(&self, dst: &mut [u8], _rest: &[u8]) {
+            let src = unsafe {
+                ::std::slice::from_raw_parts(
+                    self as *const EntityDetails as *const u8,
+                    Self::size(),
+                )
+            };
+            dst.copy_from_slice(src);
+        }
+    }
+    impl<'b> flatbuffers::Push for &'b EntityDetails {
+        type Output = EntityDetails;
+
+        #[inline]
+        fn push(&self, dst: &mut [u8], _rest: &[u8]) {
+            let src = unsafe {
+                ::std::slice::from_raw_parts(
+                    *self as *const EntityDetails as *const u8,
+                    Self::size(),
+                )
+            };
+            dst.copy_from_slice(src);
+        }
+    }
+
+    impl<'a> flatbuffers::Verifiable for EntityDetails {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.in_buffer::<Self>(pos)
+        }
+    }
+    impl<'a> EntityDetails {
+        #[allow(clippy::too_many_arguments)]
+        pub fn new(id: i32, living: bool, alive: bool) -> Self {
+            let mut s = Self([0; 8]);
+            s.set_id(id);
+            s.set_living(living);
+            s.set_alive(alive);
+            s
+        }
+
+        pub fn id(&self) -> i32 {
+            let mut mem = core::mem::MaybeUninit::<i32>::uninit();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    self.0[0..].as_ptr(),
+                    mem.as_mut_ptr() as *mut u8,
+                    core::mem::size_of::<i32>(),
+                );
+                mem.assume_init()
+            }
+            .from_little_endian()
+        }
+
+        pub fn set_id(&mut self, x: i32) {
+            let x_le = x.to_little_endian();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &x_le as *const i32 as *const u8,
+                    self.0[0..].as_mut_ptr(),
+                    core::mem::size_of::<i32>(),
+                );
+            }
+        }
+
+        pub fn living(&self) -> bool {
+            let mut mem = core::mem::MaybeUninit::<bool>::uninit();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    self.0[4..].as_ptr(),
+                    mem.as_mut_ptr() as *mut u8,
+                    core::mem::size_of::<bool>(),
+                );
+                mem.assume_init()
+            }
+            .from_little_endian()
+        }
+
+        pub fn set_living(&mut self, x: bool) {
+            let x_le = x.to_little_endian();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &x_le as *const bool as *const u8,
+                    self.0[4..].as_mut_ptr(),
+                    core::mem::size_of::<bool>(),
+                );
+            }
+        }
+
+        pub fn alive(&self) -> bool {
+            let mut mem = core::mem::MaybeUninit::<bool>::uninit();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    self.0[5..].as_ptr(),
+                    mem.as_mut_ptr() as *mut u8,
+                    core::mem::size_of::<bool>(),
+                );
+                mem.assume_init()
+            }
+            .from_little_endian()
+        }
+
+        pub fn set_alive(&mut self, x: bool) {
+            let x_le = x.to_little_endian();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &x_le as *const bool as *const u8,
+                    self.0[5..].as_mut_ptr(),
+                    core::mem::size_of::<bool>(),
+                );
+            }
+        }
+    }
+
     pub enum WriteBodyOffset {}
     #[derive(Copy, Clone, PartialEq)]
 
@@ -1721,7 +1877,7 @@ pub mod mcfs {
     impl<'a> StateResponse<'a> {
         pub const VT_PLAYER_ENTITY_ID: flatbuffers::VOffsetT = 4;
         pub const VT_PLAYER_WORLD: flatbuffers::VOffsetT = 6;
-        pub const VT_ENTITY_IDS: flatbuffers::VOffsetT = 8;
+        pub const VT_ENTITIES: flatbuffers::VOffsetT = 8;
         pub const VT_BLOCK: flatbuffers::VOffsetT = 10;
 
         #[inline]
@@ -1737,8 +1893,8 @@ pub mod mcfs {
             if let Some(x) = args.block {
                 builder.add_block(x);
             }
-            if let Some(x) = args.entity_ids {
-                builder.add_entity_ids(x);
+            if let Some(x) = args.entities {
+                builder.add_entities(x);
             }
             if let Some(x) = args.player_entity_id {
                 builder.add_player_entity_id(x);
@@ -1760,12 +1916,13 @@ pub mod mcfs {
                 .get::<Dimension>(StateResponse::VT_PLAYER_WORLD, None)
         }
         #[inline]
-        pub fn entity_ids(&self) -> Option<flatbuffers::Vector<'a, i32>> {
+        pub fn entities(&self) -> Option<&'a [EntityDetails]> {
             self._tab
-                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, i32>>>(
-                    StateResponse::VT_ENTITY_IDS,
+                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, EntityDetails>>>(
+                    StateResponse::VT_ENTITIES,
                     None,
                 )
+                .map(|v| v.safe_slice())
         }
         #[inline]
         pub fn block(&self) -> Option<BlockDetails<'a>> {
@@ -1782,26 +1939,18 @@ pub mod mcfs {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
-                .visit_field::<i32>("player_entity_id", Self::VT_PLAYER_ENTITY_ID, false)?
-                .visit_field::<Dimension>("player_world", Self::VT_PLAYER_WORLD, false)?
-                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, i32>>>(
-                    "entity_ids",
-                    Self::VT_ENTITY_IDS,
-                    false,
-                )?
-                .visit_field::<flatbuffers::ForwardsUOffset<BlockDetails>>(
-                    "block",
-                    Self::VT_BLOCK,
-                    false,
-                )?
-                .finish();
+     .visit_field::<i32>("player_entity_id", Self::VT_PLAYER_ENTITY_ID, false)?
+     .visit_field::<Dimension>("player_world", Self::VT_PLAYER_WORLD, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, EntityDetails>>>("entities", Self::VT_ENTITIES, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<BlockDetails>>("block", Self::VT_BLOCK, false)?
+     .finish();
             Ok(())
         }
     }
     pub struct StateResponseArgs<'a> {
         pub player_entity_id: Option<i32>,
         pub player_world: Option<Dimension>,
-        pub entity_ids: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, i32>>>,
+        pub entities: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, EntityDetails>>>,
         pub block: Option<flatbuffers::WIPOffset<BlockDetails<'a>>>,
     }
     impl<'a> Default for StateResponseArgs<'a> {
@@ -1810,7 +1959,7 @@ pub mod mcfs {
             StateResponseArgs {
                 player_entity_id: None,
                 player_world: None,
-                entity_ids: None,
+                entities: None,
                 block: None,
             }
         }
@@ -1831,13 +1980,13 @@ pub mod mcfs {
                 .push_slot_always::<Dimension>(StateResponse::VT_PLAYER_WORLD, player_world);
         }
         #[inline]
-        pub fn add_entity_ids(
+        pub fn add_entities(
             &mut self,
-            entity_ids: flatbuffers::WIPOffset<flatbuffers::Vector<'b, i32>>,
+            entities: flatbuffers::WIPOffset<flatbuffers::Vector<'b, EntityDetails>>,
         ) {
             self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
-                StateResponse::VT_ENTITY_IDS,
-                entity_ids,
+                StateResponse::VT_ENTITIES,
+                entities,
             );
         }
         #[inline]
@@ -1870,7 +2019,7 @@ pub mod mcfs {
             let mut ds = f.debug_struct("StateResponse");
             ds.field("player_entity_id", &self.player_entity_id());
             ds.field("player_world", &self.player_world());
-            ds.field("entity_ids", &self.entity_ids());
+            ds.field("entities", &self.entities());
             ds.field("block", &self.block());
             ds.finish()
         }

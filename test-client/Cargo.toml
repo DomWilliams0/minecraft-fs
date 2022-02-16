@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 ipc = { path = "../ipc", features = ["client"] }
 
+rand = "0.8"
 flatbuffers = "2.0"
 env_logger = "0.9"
 log = "0.4"

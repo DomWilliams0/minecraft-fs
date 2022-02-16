@@ -25,10 +25,16 @@ table StateResponse {
     // null if not in game
     player_world:Dimension = null;
     // only present if requested
-    entity_ids:[int32];
+    entities:[EntityDetails];
 
     // only present if target block and world were in request
     block:BlockDetails;
+}
+
+struct EntityDetails {
+    id:int32;
+    living:bool;
+    alive:bool;
 }
 
 table BlockDetails {
