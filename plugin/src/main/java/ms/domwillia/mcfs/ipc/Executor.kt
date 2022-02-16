@@ -58,12 +58,12 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
 
                 val respBody = when (maybeRespBody) {
                     is Int -> maybeRespBody
-                    null -> {
+                    null, Unit -> {
                         Response.startResponse(responseBuilder)
                         Response.endResponse(responseBuilder)
                     }
                     else -> {
-                        MinecraftFsMod.LOGGER.error("Bad response returned from executor")
+                        MinecraftFsMod.LOGGER.error("Bad response returned from executor ($maybeRespBody)")
                         mkError(Error.Unknown)
                     }
                 }
