@@ -1,6 +1,7 @@
 use std::io::{ErrorKind, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use flatbuffers::{root, FlatBufferBuilder, InvalidFlatbuffer};
 use thiserror::Error;
@@ -13,6 +14,7 @@ use crate::generated::{
 };
 
 const RETRIES: u8 = 2;
+const TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct IpcChannel {
     sock_path: PathBuf,
@@ -38,6 +40,9 @@ pub enum IpcError {
 
     #[error("IO error reading from socket: {0}")]
     Receiving(#[source] std::io::Error),
+
+    #[error("IO error setting socket timeout: {0}")]
+    SettingTimeout(#[source] std::io::Error),
 
     #[error("Player is not currently in a game")]
     NoCurrentGame,
@@ -268,7 +273,13 @@ impl IpcChannel {
 
     fn open_socket(path: &Path) -> Result<UnixStream, IpcError> {
         match UnixStream::connect(path) {
-            Ok(f) => Ok(f),
+            Ok(f) => {
+                f.set_read_timeout(Some(TIMEOUT))
+                    .map_err(IpcError::SettingTimeout)?;
+                f.set_write_timeout(Some(TIMEOUT))
+                    .map_err(IpcError::SettingTimeout)?;
+                Ok(f)
+            }
             Err(err) if err.kind() == ErrorKind::NotFound => Err(IpcError::NotFound),
             Err(err) => Err(IpcError::Connecting(err)),
         }
