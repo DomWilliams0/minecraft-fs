@@ -4,6 +4,7 @@ import ms.domwillia.mcfs.ipc.IpcChannel
 import net.fabricmc.api.ModInitializer
 import org.apache.logging.log4j.LogManager
 import java.io.IOException
+import kotlin.io.path.exists
 
 class MinecraftFsMod : ModInitializer {
 
@@ -19,13 +20,16 @@ class MinecraftFsMod : ModInitializer {
         })
 
         val watchdog = Thread {
+            val socketPath = IpcChannel.socketPath()
             while (true) {
                 LOGGER.info("Initialising IPC")
                 val thread = reinit()
 
-                while (thread.isAlive) {
+                while (thread.isAlive && socketPath.exists() ) {
                     Thread.sleep(1000)
                 }
+
+                IPC!!.close()
             }
         }
         watchdog.isDaemon = true

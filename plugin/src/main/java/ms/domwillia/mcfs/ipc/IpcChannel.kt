@@ -10,14 +10,18 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.ServerSocketChannel
 import java.nio.channels.SocketChannel
+import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicBoolean
 
 class IpcChannel : Runnable {
     private val channel: ServerSocketChannel
+    val keepRunning = AtomicBoolean(true)
 
     @Throws(IOException::class)
     fun close() {
         channel.close()
+        keepRunning.set(false)
     }
 
     @ExperimentalUnsignedTypes
@@ -26,7 +30,7 @@ class IpcChannel : Runnable {
         val buf = ByteBuffer.allocate(8192)
         val responseBuilder = FlatBufferBuilder(8192)
         val executor = Executor(responseBuilder)
-        while (true) {
+        while (keepRunning.get()) {
             var client: SocketChannel? = null
             try {
                 client = channel.accept()
@@ -78,15 +82,23 @@ class IpcChannel : Runnable {
         }
     }
 
+
     init {
-        val username = System.getenv("USER")
-        val tmpdir = System.getProperty("java.io.tmpdir")
-        val path = Paths.get(tmpdir, String.format("minecraft-fuse-%s", username ?: "user"))
+        val path = socketPath();
         path.toFile().delete() // ensure we create it ourselves
         val address = UnixDomainSocketAddress.of(path)
         MinecraftFsMod.LOGGER.info("Binding to socket $address")
 
         channel = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
         channel.bind(address)
+    }
+
+    companion object {
+        fun socketPath(): Path {
+            val username = System.getenv("USER")
+            val tmpdir = System.getProperty("java.io.tmpdir")
+            return Paths.get(tmpdir, String.format("minecraft-fuse-%s", username ?: "user"))
+        }
+
     }
 }
