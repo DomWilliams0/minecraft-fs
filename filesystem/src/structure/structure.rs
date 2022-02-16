@@ -157,7 +157,7 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
             "README",
             FileEntry::build()
                 .behaviour(FileBehaviour::Static(
-                    "Path format is ./x,y,z\ne.g. 0,64,100\n",
+                    "Path format is ./x,y,z\ne.g. 0,64,100\n".into(),
                 ))
                 .finish(),
         );
@@ -174,8 +174,8 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
                 DynamicStateType::Block(pos)
             },
             |state, reg| {
-                // TODO support writing
                 let block = state.block.as_ref().expect("missing block details");
+                let pos = block.pos;
 
                 reg.add_root_entry(
                     "type",
@@ -187,7 +187,14 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
                         .finish(),
                 );
 
-                // TODO add static file with block pos
+                reg.add_root_entry(
+                    "pos",
+                    FileEntry::build()
+                        .behaviour(FileBehaviour::Static(
+                            format!("{},{},{}", pos.x(), pos.y(), pos.z()).into(),
+                        ))
+                        .finish(),
+                );
 
                 // TODO useful block info
                 if block.has_color {
@@ -201,6 +208,31 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
                             .finish(),
                     );
                 }
+
+                let neighbours_dir = reg.add_root_entry("adjacent", DirEntry::default());
+                type PosMut<'a> = &'a mut (i32, i32, i32);
+                macro_rules! adjacent {
+                    ($name:expr, $pos_fn:expr) => {
+                        reg.add_entry(
+                            neighbours_dir,
+                            $name,
+                            LinkEntry::build(move |_| {
+                                let mut pos = (pos.x(), pos.y(), pos.z());
+                                #[allow(clippy::redundant_closure_call)]
+                                ($pos_fn)(&mut pos);
+                                Some(format!("../../{},{},{}", pos.0, pos.1, pos.2).into())
+                            })
+                            .finish(),
+                        );
+                    };
+                }
+
+                adjacent!("west", |pos: PosMut| pos.0 -= 1);
+                adjacent!("east", |pos: PosMut| pos.0 += 1);
+                adjacent!("below", |pos: PosMut| pos.1 -= 1);
+                adjacent!("above", |pos: PosMut| pos.1 += 1);
+                adjacent!("north", |pos: PosMut| pos.2 -= 1);
+                adjacent!("south", |pos: PosMut| pos.2 += 1);
             },
         );
     }

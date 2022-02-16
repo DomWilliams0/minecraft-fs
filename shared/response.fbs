@@ -38,6 +38,7 @@ struct EntityDetails {
 }
 
 table BlockDetails {
+    pos:BlockPos (required);
     has_color:bool;
 }
 

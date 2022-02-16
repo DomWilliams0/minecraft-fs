@@ -19,6 +19,7 @@ pub struct GameState {
 #[derive(Debug)]
 pub struct BlockDetails {
     pub has_color: bool,
+    pub pos: BlockPos,
 }
 
 pub struct CachedGameState {
@@ -99,6 +100,7 @@ impl CachedGameState {
                     .unwrap_or_default(),
                 block: response.block().map(|b| BlockDetails {
                     has_color: b.has_color(),
+                    pos: *b.pos(),
                 }),
             };
             trace!("new game state: {:?}", self.state);

@@ -165,7 +165,7 @@ impl fuser::Filesystem for MinecraftFs {
         };
 
         let state = self.structure.command_state_for_file(ino);
-        let resp = match self.ipc.send_read_command(cmd, resp, state) {
+        let resp = match self.ipc.send_read_command(*cmd, *resp, state) {
             Ok(resp) => resp,
             Err(err) => {
                 error!("command failed: {}", err);
@@ -216,7 +216,7 @@ impl fuser::Filesystem for MinecraftFs {
         };
 
         let state = self.structure.command_state_for_file(ino);
-        match self.ipc.send_write_command(cmd, body_type, data, state) {
+        match self.ipc.send_write_command(*cmd, *body_type, data, state) {
             Ok(resp) => reply.written(resp as u32),
             Err(err) => {
                 error!("write failed: {}", err);

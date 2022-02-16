@@ -4,12 +4,12 @@ use std::iter::once;
 
 use flatbuffers::FlatBufferBuilder;
 use log::*;
-use rand::prelude::IteratorRandom;
+
 use rand::{thread_rng, Rng};
 
 use ipc::generated::{
-    BlockDetails, BlockDetailsArgs, Command, CommandType, Dimension, EntityDetails, Error,
-    GameResponse, GameResponseArgs, GameResponseBody, Response, ResponseArgs, StateResponse,
+    BlockDetails, BlockDetailsArgs, BlockPos, Command, CommandType, Dimension, EntityDetails,
+    Error, GameResponse, GameResponseArgs, GameResponseBody, Response, ResponseArgs, StateResponse,
     StateResponseArgs, Vec3,
 };
 use ipc::{ConnectedIpcClient, IpcClient, IpcError};
@@ -35,7 +35,7 @@ enum ClientCommandResponse {
 
 enum ClientResponse {
     Command(ClientCommandResponse),
-    State { requested_block: bool },
+    State { target_block: Option<BlockPos> },
 }
 
 fn target_entity(cmd: &Command) -> Result<i32, Error> {
@@ -77,6 +77,7 @@ fn handle_client(mut client: ConnectedIpcClient) -> Result<(), Box<dyn StdError>
                     Ok(_) => ClientCommandResponse::Float(10.0),
                     Err(err) => ClientCommandResponse::Error(err),
                 },
+                CommandType::BlockType => ClientCommandResponse::String("minecraft:dirt".into()),
                 CommandType::WorldTime => ClientCommandResponse::Int(500),
                 CommandType::ControlSay | CommandType::ControlJump | CommandType::ControlMove => {
                     continue
@@ -86,7 +87,7 @@ fn handle_client(mut client: ConnectedIpcClient) -> Result<(), Box<dyn StdError>
         } else if let Some(req) = msg.body_as_state_request() {
             resp_body_type = GameResponseBody::StateResponse;
             ClientResponse::State {
-                requested_block: req.target_world().is_some() && req.target_block().is_some(),
+                target_block: req.target_world().and_then(|_| req.target_block().copied()),
             }
         } else {
             unreachable!("bad msg type") // TODO send error?
@@ -106,15 +107,18 @@ fn handle_client(mut client: ConnectedIpcClient) -> Result<(), Box<dyn StdError>
                 }
                 Response::create(&mut buf, &body).as_union_value()
             }
-            ClientResponse::State { requested_block } => {
-                let block = if requested_block {
-                    Some(BlockDetails::create(
+            ClientResponse::State {
+                target_block: requested_block,
+            } => {
+                let block = requested_block.map(|block| {
+                    BlockDetails::create(
                         &mut buf,
-                        &BlockDetailsArgs { has_color: true },
-                    ))
-                } else {
-                    None
-                };
+                        &BlockDetailsArgs {
+                            has_color: true,
+                            pos: Some(&block),
+                        },
+                    )
+                });
 
                 let mut rand = thread_rng();
                 let n = rand.gen_range(3..10);

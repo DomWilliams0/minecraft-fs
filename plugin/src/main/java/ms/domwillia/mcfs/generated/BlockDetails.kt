@@ -17,9 +17,18 @@ class BlockDetails : Table() {
         __init(_i, _bb)
         return this
     }
+    val pos : MCFS.BlockPos? get() = pos(MCFS.BlockPos())
+    fun pos(obj: MCFS.BlockPos) : MCFS.BlockPos? {
+        val o = __offset(4)
+        return if (o != 0) {
+            obj.__assign(o + bb_pos, bb)
+        } else {
+            null
+        }
+    }
     val hasColor : Boolean
         get() {
-            val o = __offset(4)
+            val o = __offset(6)
             return if(o != 0) 0.toByte() != bb.get(o + bb_pos) else false
         }
     companion object {
@@ -29,15 +38,12 @@ class BlockDetails : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun createBlockDetails(builder: FlatBufferBuilder, hasColor: Boolean) : Int {
-            builder.startTable(1)
-            addHasColor(builder, hasColor)
-            return endBlockDetails(builder)
-        }
-        fun startBlockDetails(builder: FlatBufferBuilder) = builder.startTable(1)
-        fun addHasColor(builder: FlatBufferBuilder, hasColor: Boolean) = builder.addBoolean(0, hasColor, false)
+        fun startBlockDetails(builder: FlatBufferBuilder) = builder.startTable(2)
+        fun addPos(builder: FlatBufferBuilder, pos: Int) = builder.addStruct(0, pos, 0)
+        fun addHasColor(builder: FlatBufferBuilder, hasColor: Boolean) = builder.addBoolean(1, hasColor, false)
         fun endBlockDetails(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
+                builder.required(o, 4)
             return o
         }
     }

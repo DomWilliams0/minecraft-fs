@@ -100,7 +100,7 @@ pub struct FileEntry {
     filter: Option<FileFilterFn>,
 }
 
-pub type LinkTargetFn = fn(&GameState) -> Option<Cow<'static, str>>;
+pub type LinkTargetFn = Box<dyn Fn(&GameState) -> Option<Cow<'static, str>> + Send>;
 pub struct LinkEntry {
     target: LinkTargetFn,
     filter: Option<FileFilterFn>,
@@ -119,13 +119,13 @@ pub enum EntryFilterResult {
     Exclude,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub enum FileBehaviour {
     ReadOnly(CommandType, BodyType),
     WriteOnly(CommandType, BodyType),
     ReadWrite(CommandType, BodyType),
     // TODO rw with different types
-    Static(&'static str),
+    Static(Cow<'static, str>),
     /// Not readable or writable
     ForShow,
 }
@@ -727,8 +727,8 @@ impl FileEntry {
         FileEntryBuilder::default()
     }
 
-    pub fn behaviour(&self) -> Option<FileBehaviour> {
-        self.behaviour
+    pub fn behaviour(&self) -> Option<&FileBehaviour> {
+        self.behaviour.as_ref()
     }
 }
 
@@ -751,12 +751,14 @@ impl LinkEntryBuilder {
 }
 
 impl LinkEntry {
-    pub fn build(target: LinkTargetFn) -> LinkEntryBuilder {
-        LinkEntryBuilder::new(target)
+    pub fn build(
+        target: impl Fn(&GameState) -> Option<Cow<'static, str>> + Send + 'static,
+    ) -> LinkEntryBuilder {
+        LinkEntryBuilder::new(Box::new(target))
     }
 
-    pub fn target(&self) -> LinkTargetFn {
-        self.target
+    pub fn target(&self) -> &LinkTargetFn {
+        &self.target
     }
 }
 

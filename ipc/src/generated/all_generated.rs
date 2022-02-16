@@ -2042,7 +2042,8 @@ pub mod mcfs {
     }
 
     impl<'a> BlockDetails<'a> {
-        pub const VT_HAS_COLOR: flatbuffers::VOffsetT = 4;
+        pub const VT_POS: flatbuffers::VOffsetT = 4;
+        pub const VT_HAS_COLOR: flatbuffers::VOffsetT = 6;
 
         #[inline]
         pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -2051,13 +2052,22 @@ pub mod mcfs {
         #[allow(unused_mut)]
         pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
             _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
-            args: &'args BlockDetailsArgs,
+            args: &'args BlockDetailsArgs<'args>,
         ) -> flatbuffers::WIPOffset<BlockDetails<'bldr>> {
             let mut builder = BlockDetailsBuilder::new(_fbb);
+            if let Some(x) = args.pos {
+                builder.add_pos(x);
+            }
             builder.add_has_color(args.has_color);
             builder.finish()
         }
 
+        #[inline]
+        pub fn pos(&self) -> &'a BlockPos {
+            self._tab
+                .get::<BlockPos>(BlockDetails::VT_POS, None)
+                .unwrap()
+        }
         #[inline]
         pub fn has_color(&self) -> bool {
             self._tab
@@ -2074,18 +2084,23 @@ pub mod mcfs {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
+                .visit_field::<BlockPos>("pos", Self::VT_POS, true)?
                 .visit_field::<bool>("has_color", Self::VT_HAS_COLOR, false)?
                 .finish();
             Ok(())
         }
     }
-    pub struct BlockDetailsArgs {
+    pub struct BlockDetailsArgs<'a> {
+        pub pos: Option<&'a BlockPos>,
         pub has_color: bool,
     }
-    impl<'a> Default for BlockDetailsArgs {
+    impl<'a> Default for BlockDetailsArgs<'a> {
         #[inline]
         fn default() -> Self {
-            BlockDetailsArgs { has_color: false }
+            BlockDetailsArgs {
+                pos: None, // required field
+                has_color: false,
+            }
         }
     }
     pub struct BlockDetailsBuilder<'a: 'b, 'b> {
@@ -2093,6 +2108,11 @@ pub mod mcfs {
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
     }
     impl<'a: 'b, 'b> BlockDetailsBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_pos(&mut self, pos: &BlockPos) {
+            self.fbb_
+                .push_slot_always::<&BlockPos>(BlockDetails::VT_POS, pos);
+        }
         #[inline]
         pub fn add_has_color(&mut self, has_color: bool) {
             self.fbb_
@@ -2111,6 +2131,7 @@ pub mod mcfs {
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<BlockDetails<'a>> {
             let o = self.fbb_.end_table(self.start_);
+            self.fbb_.required(o, BlockDetails::VT_POS, "pos");
             flatbuffers::WIPOffset::new(o.value())
         }
     }
@@ -2118,6 +2139,7 @@ pub mod mcfs {
     impl std::fmt::Debug for BlockDetails<'_> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let mut ds = f.debug_struct("BlockDetails");
+            ds.field("pos", &self.pos());
             ds.field("has_color", &self.has_color());
             ds.finish()
         }
