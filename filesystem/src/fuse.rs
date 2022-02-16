@@ -233,6 +233,11 @@ impl fuser::Filesystem for MinecraftFs {
         offset: i64,
         mut reply: ReplyDirectory,
     ) {
+        if offset == 0 {
+            // this happens occasionally but not too often
+            self.structure.maintain();
+        }
+
         trace!("readdir(ino={}, fh={}, offset={})", ino, fh, offset);
 
         let _dir = match self.structure.lookup_inode(ino) {

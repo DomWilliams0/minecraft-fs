@@ -16,7 +16,9 @@ use crate::structure::inode::{InodeBlock, InodeBlockAllocator};
 
 pub struct FilesystemStructure {
     inner: StructureInner,
-    /// TODO remove stale entries
+
+    last_maintain: Instant,
+    // TODO use an int specific map for performance
     inode_remapping: HashMap<u64, u64>,
 }
 
@@ -480,6 +482,24 @@ impl FilesystemStructure {
             current = *parent;
         }
     }
+
+    pub fn maintain(&mut self) {
+        const PERIOD: Duration = Duration::from_secs(30);
+        if self.last_maintain.elapsed() < PERIOD {
+            // dont bother too often
+            return;
+        }
+
+        self.last_maintain = Instant::now();
+
+        let prev = self.inode_remapping.len();
+        self.inode_remapping
+            .retain(|from, to| self.inner.registry.contains_key(to));
+        let new = self.inode_remapping.len();
+        if prev != new {
+            trace!("removed stale inode mappings, from {} to {}", prev, new);
+        }
+    }
 }
 
 impl DynamicInterest {
@@ -529,6 +549,7 @@ impl FilesystemStructureBuilder {
         FilesystemStructure {
             inner: self.inner,
             inode_remapping: HashMap::new(),
+            last_maintain: Instant::now(),
         }
     }
 }
