@@ -47,7 +47,18 @@ class Minecraft:
             print(f"error: {e}")
             exit(1)
 
-    # TODO provide world or default to players
+    def player(self) -> Optional[Entity]:
+        try:
+            entity = (self.mnt / "player" / "entity").resolve()
+            world_name = (self.mnt / "player" / "world").readlink().name
+
+            entity_id = int(entity.name)
+            entity_ty = self._read(entity / "type")
+            entity_pos = Position.from_string(self._read(entity / "position"))
+            return Entity(entity_id, entity_ty, entity_pos, world_name, mc=self)
+        except Exception:
+            return None
+
     def iter_entities(self, living_filter=None, world=None):
         if world is not None:
             world_name = world
@@ -59,19 +70,29 @@ class Minecraft:
         use_living_filter = isinstance(living_filter, bool)
 
         for entity in entities.glob("*"):
-            alive = self._exists(entity / "alive")
-            if not alive:
-                continue
+            try:
+                alive = self._exists(entity / "alive")
+                if not alive:
+                    continue
 
-            living = self._exists(entity / "living")
-            if use_living_filter and living != living_filter:
-                continue
+                living = self._exists(entity / "living")
+                if use_living_filter and living != living_filter:
+                    continue
 
-            # TODO lazily evaluate fields? needs to remember its world
-            entity_id = int(entity.name)
-            entity_ty = self._read(entity / "type")
-            entity_pos = Position.from_string(self._read(entity / "position"))
-            yield Entity(entity_id, entity_ty, entity_pos, world_name, mc=self)
+                # TODO lazily evaluate fields? needs to remember its world
+                entity_id = int(entity.name)
+                entity_ty = self._read(entity / "type")
+                entity_pos = Position.from_string(self._read(entity / "position"))
+                yield Entity(entity_id, entity_ty, entity_pos, world_name, mc=self)
+            except IoException:
+                pass
+
+    # TODO block proxy object to get and set on
+    def set_block(self, world: str, pos: BlockPos, new_block: str):
+        path = self.mnt / "worlds" / world / "blocks" / repr(pos) / "type"
+        self._write(path, new_block)
+
+
 
     def _read(self, p: Path) -> str:
         try:
@@ -108,6 +129,28 @@ class Position:
         except ValueError:
             raise RuntimeError(f"invalid position '{s}'")
 
+    def to_block_pos(self) -> BlockPos:
+        return BlockPos(int(self.x), int(self.y), int(self.z))
+
+    def __repr__(self):
+        return f"{self.x},{self.y},{self.z}"
+
+@dataclass
+class BlockPos:
+    x: int
+    y: int
+    z: int
+
+    SPLIT_PATTERN: ClassVar[re.Pattern] = re.compile(r"\s|,")
+
+    @classmethod
+    def from_string(cls, s: str) -> Optional[Position]:
+        [x, y, z] = cls.SPLIT_PATTERN.split(s, 2)
+        try:
+            return Position(int(x), int(y), int(z))
+        except ValueError:
+            raise RuntimeError(f"invalid blockpos '{s}'")
+
     def __repr__(self):
         return f"{self.x},{self.y},{self.z}"
 
@@ -126,3 +169,7 @@ class Entity:
         """
         path = self.mc.mnt / "worlds" / self.world / "entities" / "by-id" / str(self.id) / "position"
         self.mc._write(path, repr(target))
+
+    def kill(self):
+        path = self.mc.mnt / "worlds" / self.world / "entities" / "by-id" / str(self.id) / "health"
+        self.mc._write(path, "0")
