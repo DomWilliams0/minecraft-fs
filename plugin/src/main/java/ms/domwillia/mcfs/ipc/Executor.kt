@@ -34,7 +34,7 @@ class InvalidTypeForWriteException : Exception()
 @ExperimentalUnsignedTypes
 class Executor(private val responseBuilder: FlatBufferBuilder) {
 
-    fun execute(request: GameRequest): ByteBuffer? {
+    fun execute(request: GameRequest): ByteBuffer {
         responseBuilder.clear()
 
         val gameResp = when (request.bodyType) {
@@ -44,24 +44,32 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                 } catch (_: NoGameException) {
                     mkError(Error.NoGame)
                 } catch (_: MissingTargetException) {
-                    MinecraftFsMod.LOGGER.error("missing target info")
+                    MinecraftFsMod.LOGGER.error("Missing target info")
                     mkError(Error.MalformedRequest)
                 } catch (e: UnknownEntityException) {
-                    MinecraftFsMod.LOGGER.error("no such entity ${e.id}")
+                    MinecraftFsMod.LOGGER.error("No such entity ${e.id}")
                     mkError(Error.NoSuchEntity)
                 } catch (e: BadBlockException) {
-                    MinecraftFsMod.LOGGER.error("bad block: ${e.block}")
+                    MinecraftFsMod.LOGGER.error("Bad block: ${e.block}")
                     mkError(Error.NoSuchBlock)
                 } catch (e: Exception) {
                     MinecraftFsMod.LOGGER.catching(e)
                     mkError(Error.Unknown)
                 }
 
-                // TODO how are errors during writes handled/reported in fuse?
-
-                (maybeRespBody as? Int)?.let {
-                    GameResponse.createGameResponse(responseBuilder, GameResponseBody.Response, it)
+                val respBody = when (maybeRespBody) {
+                    is Int -> maybeRespBody
+                    null -> {
+                        Response.startResponse(responseBuilder)
+                        Response.endResponse(responseBuilder)
+                    }
+                    else -> {
+                        MinecraftFsMod.LOGGER.error("Bad response returned from executor")
+                        mkError(Error.Unknown)
+                    }
                 }
+
+                GameResponse.createGameResponse(responseBuilder, GameResponseBody.Response, respBody)
             }
             GameRequestBody.StateRequest -> {
                 val respBody = executeStateRequest(request.body(StateRequest()) as StateRequest)
@@ -69,17 +77,17 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
             }
 
             else -> {
+                MinecraftFsMod.LOGGER.error("invalid request type");
                 throw NullPointerException()
             }
         }
 
-        return gameResp?.let {
-            responseBuilder.finish(it)
-            responseBuilder.dataBuffer()
-        }
+        responseBuilder.finish(gameResp)
+        return responseBuilder.dataBuffer()
     }
 
-    private fun executeCommand(command: Command): Any {
+    @Suppress("RedundantNullableReturnType")
+    private fun executeCommand(command: Command): Any? {
         MinecraftFsMod.LOGGER.info("Executing command '${CommandType.name(command.cmd)}'")
         return when (command.cmd) {
             CommandType.PlayerName -> {
@@ -142,7 +150,6 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                         val block = (Registry.BLOCK as SimpleRegistry<Block>).get(id)!!
                         val state = block.defaultState
 
-                        // TODO return result
                         world.setBlockState(pos, state)
 
                     } catch (e: Exception) {
@@ -241,6 +248,8 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
         get() = MinecraftClient.getInstance().player ?: throw NoGameException()
 
     private fun mkError(err: Int): Int {
+        responseBuilder.clear()
+
         Response.startResponse(responseBuilder)
         Response.addError(responseBuilder, err)
         return Response.endResponse(responseBuilder)

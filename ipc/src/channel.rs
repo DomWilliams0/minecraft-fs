@@ -54,7 +54,7 @@ pub enum IpcError {
     UnexpectedGameResponse(GameResponseBody),
 
     #[error("Expected response type {0:?} but got something else")]
-    UnexpectedResponse(BodyType),
+    UnexpectedResponse(Option<BodyType>),
 
     #[error("Deserialization failed: {0}")]
     Deserialization(#[from] InvalidFlatbuffer),
@@ -140,7 +140,7 @@ impl IpcChannel {
     fn send_raw_command(
         &mut self,
         cmd: CommandType,
-        response_type: Option<BodyType>,
+        expected_response_type: Option<BodyType>,
         write: Option<Body>,
         state: CommandState,
     ) -> Result<Option<Body>, IpcError> {
@@ -204,11 +204,6 @@ impl IpcChannel {
 
         self.send_raw_request(buf.finished_data())?;
 
-        let resp_type = match response_type {
-            Some(ty) => ty,
-            None => return Ok(None),
-        };
-
         let response = self
             .recv_raw_response()
             .and_then(|resp| root::<GameResponse>(resp).map_err(IpcError::Deserialization))?;
@@ -227,21 +222,22 @@ impl IpcChannel {
             use BodyType::*;
             return Ok(Some(
                 match (
-                    resp_type,
+                    expected_response_type,
                     response.float(),
                     response.int(),
                     response.string(),
                     response.vec(),
                 ) {
-                    (Float, Some(val), None, None, None) => Body::Float(val),
-                    (Integer, None, Some(val), None, None) => Body::Integer(val),
-                    (String, None, None, Some(val), None) => Body::String(val.into()),
-                    (Position, None, None, None, Some(val)) => Body::Vec {
+                    (None, None, None, None, None) => return Ok(None),
+                    (Some(Float), Some(val), None, None, None) => Body::Float(val),
+                    (Some(Integer), None, Some(val), None, None) => Body::Integer(val),
+                    (Some(String), None, None, Some(val), None) => Body::String(val.into()),
+                    (Some(Position), None, None, None, Some(val)) => Body::Vec {
                         x: val.x(),
                         y: val.y(),
                         z: val.z(),
                     },
-                    _ => return Err(IpcError::UnexpectedResponse(resp_type)),
+                    _ => return Err(IpcError::UnexpectedResponse(expected_response_type)),
                 },
             ));
         }

@@ -42,16 +42,14 @@ class IpcChannel : Runnable {
                     val request = GameRequest.getRootAsGameRequest(buf);
                     val response = executor.execute(request)
 
-                    response?.let {
-                        val responseSize = it.remaining()
-                        buf.clear();
-                        buf.order(ByteOrder.LITTLE_ENDIAN)
-                        buf.putInt(responseSize)
-                        buf.put(it)
-                        buf.flip()
-                        MinecraftFsMod.LOGGER.info("Writing $responseSize bytes")
-                        client.write(buf)
-                    }
+                    val responseSize = response.remaining()
+                    buf.clear();
+                    buf.order(ByteOrder.LITTLE_ENDIAN)
+                    buf.putInt(responseSize)
+                    buf.put(response)
+                    buf.flip()
+                    MinecraftFsMod.LOGGER.info("Writing $responseSize bytes")
+                    client.write(buf)
                 }
             } catch (e: Exception) {
                 MinecraftFsMod.LOGGER.catching(e)
