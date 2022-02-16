@@ -260,13 +260,6 @@ impl fuser::Filesystem for MinecraftFs {
             Some(children) => children,
             _ => return reply.error(libc::ENOENT),
         };
-        trace!(
-            "readdir(ino={}, fh={}, offset={}) -> {} children total",
-            ino,
-            fh,
-            offset,
-            all_children.len()
-        );
 
         let offset = offset as usize;
         let mut last_filter = None;

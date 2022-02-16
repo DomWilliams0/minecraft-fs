@@ -95,7 +95,7 @@ impl CachedGameState {
                 player_world: response.player_world(),
                 entities: response
                     .entities()
-                    .map(|v| v.into_iter().copied().collect())
+                    .map(|v| v.iter().copied().collect())
                     .unwrap_or_default(),
                 block: response.block().map(|b| BlockDetails {
                     has_color: b.has_color(),

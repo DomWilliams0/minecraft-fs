@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
 
-const INODE_BLOCK_SIZE: u64 = 2048;
+use log::trace;
+
+const INODE_BLOCK_SIZE: u64 = 4096;
 
 pub struct InodeBlock {
     start: u64,
@@ -24,7 +26,9 @@ impl Default for InodeBlockAllocator {
 
 impl InodeBlockAllocator {
     pub fn allocate(&mut self) -> InodeBlock {
-        if let Some(top) = self.free_blocks.pop_front() {
+        if let Some(mut top) = self.free_blocks.pop_front() {
+            top.next = top.start;
+            trace!("allocating new inode block {} - from freelist", top.start);
             return top;
         }
 
@@ -34,6 +38,7 @@ impl InodeBlockAllocator {
             end: self.next_block_start + INODE_BLOCK_SIZE,
         };
         self.next_block_start += INODE_BLOCK_SIZE;
+        trace!("allocating new inode block {} - brand new", new_block.start);
         new_block
     }
 
@@ -59,5 +64,9 @@ impl Iterator for InodeBlock {
 impl InodeBlock {
     pub fn iter_allocated(&self) -> impl Iterator<Item = u64> {
         self.start..self.next
+    }
+
+    pub fn iter_all_without_allocating(&self) -> impl Iterator<Item = u64> {
+        self.start..self.end
     }
 }
