@@ -1,6 +1,5 @@
 use std::ffi::OsStr;
 use std::fmt::Write;
-
 use std::time::{Duration, SystemTime};
 
 use fuser::{
@@ -115,7 +114,10 @@ impl fuser::Filesystem for MinecraftFs {
                 };
 
                 match (link.target())(state) {
-                    Some(path) => reply.data(path.as_bytes()),
+                    Some(path) => {
+                        trace!("readlink({}) -> {}", ino, path);
+                        reply.data(path.as_bytes())
+                    }
                     None => reply.error(libc::EINVAL),
                 }
             }
@@ -253,6 +255,13 @@ impl fuser::Filesystem for MinecraftFs {
             Some(children) => children,
             _ => return reply.error(libc::ENOENT),
         };
+        trace!(
+            "readdir(ino={}, fh={}, offset={}) -> {} children total",
+            ino,
+            fh,
+            offset,
+            all_children.len()
+        );
 
         let offset = offset as usize;
         let mut last_filter = None;

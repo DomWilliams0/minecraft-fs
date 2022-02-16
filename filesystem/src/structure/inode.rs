@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 const INODE_BLOCK_SIZE: u64 = 2048;
 
 pub struct InodeBlock {
+    start: u64,
     next: u64,
     end: u64,
 }
@@ -28,6 +29,7 @@ impl InodeBlockAllocator {
         }
 
         let new_block = InodeBlock {
+            start: self.next_block_start,
             next: self.next_block_start,
             end: self.next_block_start + INODE_BLOCK_SIZE,
         };
@@ -51,5 +53,11 @@ impl Iterator for InodeBlock {
             self.next += 1;
             Some(inode)
         }
+    }
+}
+
+impl InodeBlock {
+    pub fn iter_allocated(&self) -> impl Iterator<Item = u64> {
+        self.start..self.next
     }
 }
