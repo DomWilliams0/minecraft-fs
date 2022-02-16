@@ -246,6 +246,9 @@ impl IpcChannel {
     fn send_raw_request(&mut self, data: &[u8]) -> Result<(), IpcError> {
         let len = data.len() as u32;
         log::trace!("sending {} bytes on socket", len);
+        #[cfg(feature = "log_socket")]
+        log::trace!("data: {:02X?}", data);
+
         self.attempt_write(&len.to_le_bytes())?;
         self.attempt_write(data)
     }
@@ -263,6 +266,9 @@ impl IpcChannel {
         self.sock
             .read_exact(&mut self.recv_buffer)
             .map_err(IpcError::Receiving)?;
+
+        #[cfg(feature = "log_socket")]
+        log::trace!("data: {:02X?}", self.recv_buffer);
 
         Ok(&self.recv_buffer)
     }

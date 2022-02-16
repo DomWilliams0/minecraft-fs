@@ -12,3 +12,4 @@ flatbuffers = "2.0"
 
 [features]
 client = []
+log_socket = []
