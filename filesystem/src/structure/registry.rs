@@ -2,24 +2,21 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fmt::Debug;
+
 use std::time::{Duration, Instant};
 
-use log::{debug, trace, warn};
-use smallvec::{smallvec, SmallVec};
+use log::*;
+use smallvec::SmallVec;
 use strum::{EnumIter, IntoEnumIterator};
 
 use ipc::generated::{BlockPos, CommandType, Dimension};
 use ipc::{BodyType, CommandState, TargetEntity};
 
 use crate::state::{GameState, GameStateInterest};
-use crate::structure::inode::{InodeBlock, InodeBlockAllocator};
+use crate::structure::inode::InodeBlockAllocator;
 
 pub struct FilesystemStructure {
     inner: StructureInner,
-
-    last_maintain: Instant,
-    // TODO use an int specific map for performance
-    inode_remapping: HashMap<u64, u64>,
 }
 
 pub struct FilesystemStructureBuilder {
@@ -28,7 +25,6 @@ pub struct FilesystemStructureBuilder {
 
 struct StructureInner {
     inode_alloc: InodeBlockAllocator,
-    static_inodes: InodeBlock,
     root: u64,
     registry: HashMap<u64, Entry>,
     /// parent -> list of children
@@ -60,10 +56,12 @@ pub enum PhantomChildType {
 const STATE_TTL: Duration = Duration::from_secs(1);
 
 struct DynamicState {
-    inodes: SmallVec<[InodeBlock; 2]>,
+    /// (inode, its parent)
+    inodes: HashSet<(u64, u64)>,
     time_collected: Instant,
 }
 
+#[derive(PartialEq)]
 pub enum Entry {
     File(FileEntry),
     Dir(DirEntry),
@@ -72,10 +70,10 @@ pub enum Entry {
 
 pub struct DynamicDirRegistrationer<'a> {
     /// (inode, name, entry, parent)
-    entries: Vec<(u64, Cow<'static, str>, Entry, Option<u64>)>,
-    current_block: InodeBlock,
-    all_blocks: SmallVec<[InodeBlock; 2]>,
-    inodes: &'a mut InodeBlockAllocator,
+    new_entries: Vec<(u64, Cow<'static, str>, Entry, u64)>,
+    /// (reused inode, its parent)
+    to_retain: HashSet<(u64, u64)>,
+    structure: &'a mut FilesystemStructure,
     parent: u64,
 }
 
@@ -119,7 +117,7 @@ pub enum EntryFilterResult {
     Exclude,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum FileBehaviour {
     ReadOnly(CommandType, BodyType),
     WriteOnly(CommandType, BodyType),
@@ -130,6 +128,7 @@ pub enum FileBehaviour {
     ForShow,
 }
 
+#[derive(PartialEq, Debug)]
 pub enum EntryAssociatedData {
     PlayerId,
     EntityId(i32),
@@ -138,7 +137,6 @@ pub enum EntryAssociatedData {
 }
 
 pub struct DynamicInterest {
-    original_inode: u64,
     /// (inode, interest)
     inodes: SmallVec<[(DynamicInode, DynamicStateType); 2]>,
     need_fetching: HashSet<DynamicStateType>,
@@ -163,17 +161,15 @@ enum DynamicInode {
 impl FilesystemStructure {
     pub fn builder() -> FilesystemStructureBuilder {
         let mut inode_alloc = InodeBlockAllocator::default();
-        let mut static_inodes = inode_alloc.allocate();
         let mut registry = HashMap::with_capacity(256);
 
         // register root
-        let root = static_inodes.next().unwrap(); // just created it
+        let root = inode_alloc.allocate_static();
         registry.insert(root, Entry::Dir(DirEntry::default()));
 
         FilesystemStructureBuilder {
             inner: StructureInner {
                 inode_alloc,
-                static_inodes,
                 root,
                 registry,
                 child_registry: HashMap::new(),
@@ -185,52 +181,37 @@ impl FilesystemStructure {
     }
 
     pub fn lookup_inode(&self, inode: u64) -> Option<&Entry> {
-        self.inner.registry.get(&self.remap_inode(inode))
+        self.inner.registry.get(&inode)
     }
 
-    fn remap_inode(&self, inode: u64) -> u64 {
-        self.inode_remapping.get(&inode).copied().unwrap_or(inode)
+    fn get_inode(&self, inode: u64) -> &Entry {
+        self.inner
+            .registry
+            .get(&inode)
+            .unwrap_or_else(|| panic!("unregistered inode {}", inode,))
     }
-
-    fn try_get_inode(&self, inode: u64) -> Option<&Entry> {
-        self.inner.registry.get(&self.remap_inode(inode))
-    }
-
-    // fn get_inode(&self, inode: u64) -> &Entry {
-    //     self.try_get_inode(inode).unwrap_or_else(|| {
-    //         panic!(
-    //             "unregistered inode {} (mapped to {:?})",
-    //             inode,
-    //             self.inode_remapping.get(&inode)
-    //         )
-    //     })
-    // }
 
     pub fn lookup_child(&self, parent: u64, name: &OsStr) -> Option<(u64, &Entry)> {
         let name = name.to_str()?; // utf8 only
-        self.inner
-            .child_registry
-            .get(&self.remap_inode(parent))
-            .and_then(|children| {
-                children.iter().find_map(|(ino, child_name)| {
-                    if child_name == name {
-                        self.try_get_inode(*ino).map(|entry| (*ino, entry))
-                    } else {
-                        None
-                    }
-                })
+        self.inner.child_registry.get(&parent).and_then(|children| {
+            children.iter().find_map(|(ino, child_name)| {
+                if child_name == name {
+                    Some((*ino, self.get_inode(*ino)))
+                } else {
+                    None
+                }
             })
+        })
     }
 
-    pub fn lookup_children(&self, inode: u64) -> Option<impl Iterator<Item = (&Entry, &str)> + '_> {
-        self.inner
-            .child_registry
-            .get(&self.remap_inode(inode))
-            .map(|v| {
-                v.iter().filter_map(|(inode, name)| {
-                    self.try_get_inode(*inode).map(|ino| (ino, name.as_ref()))
-                })
-            })
+    pub fn lookup_children(
+        &self,
+        inode: u64,
+    ) -> Option<impl Iterator<Item = (&Entry, &str)> + ExactSizeIterator + '_> {
+        self.inner.child_registry.get(&inode).map(|v| {
+            v.iter()
+                .map(|(inode, name)| (self.get_inode(*inode), name.as_ref()))
+        })
     }
 
     /// Walks the hierarchy to find dirs with dynamic interest, and produces
@@ -244,10 +225,7 @@ impl FilesystemStructure {
         let mut interest = GameStateInterest::default();
 
         self.walk_ancestors(inode, |ancestor| {
-            let entry = match self.try_get_inode(ancestor) {
-                Some(e) => e,
-                None => return,
-            };
+            let entry = self.get_inode(ancestor);
 
             match entry {
                 Entry::Dir(dir) => {
@@ -325,7 +303,6 @@ impl FilesystemStructure {
         }
 
         DynamicInterest {
-            original_inode: inode,
             inodes: dynamics_required,
             need_fetching,
             interest,
@@ -338,111 +315,84 @@ impl FilesystemStructure {
         dyn_fn: DynamicDirFn,
         parent: u64,
         interest: DynamicStateType,
-        inodes: Option<InodeBlock>,
         state: &GameState,
-        mut original_inode: Option<&mut u64>,
     ) {
-        let mut registrationer =
-            DynamicDirRegistrationer::new(inodes, parent, &mut self.inner.inode_alloc);
+        let mut registrationer = DynamicDirRegistrationer::new(parent, self);
         (dyn_fn)(state, &mut registrationer);
 
-        let (entries, inodes_used) = registrationer.take();
+        let (new_entries, to_retain) = registrationer.take_entries();
 
-        // register dynamic entries
-        for (new_inode, new_name, new_entry, new_parent) in entries {
-            let new_parent = new_parent.unwrap_or(parent);
+        let new_inodes = new_entries
+            .iter()
+            .map(|(ino, _, _, parent)| (*ino, *parent))
+            .collect::<HashSet<_>>();
+
+        // register new inodes
+        for (new_inode, new_name, new_entry, new_parent) in new_entries.into_iter() {
             self.inner
                 .register(new_inode, new_entry, Some((new_parent, new_name)));
         }
 
-        let state = DynamicState {
-            inodes: inodes_used,
+        let new_state = DynamicState {
+            inodes: new_inodes,
             time_collected: Instant::now(),
         };
 
-        let prev = self.inner.dynamic_state.insert((parent, interest), state);
-        if let Some(prev) = prev {
-            for block in prev.inodes {
-                for inode in block.iter_allocated() {
-                    // TODO do for whole block at once
-                    let root_child_name = self.inner.unregister(inode, parent);
+        if let Some(prev_state) = self
+            .inner
+            .dynamic_state
+            .insert((parent, interest), new_state)
+        {
+            let mut old_inodes = prev_state.inodes;
+            old_inodes.retain(|key| !to_retain.contains(key));
 
-                    match original_inode.as_mut() {
-                        Some(orig) if **orig == inode => {
-                            if let Some((orig_child_inode, _)) =
-                                root_child_name.and_then(|orig_name| {
-                                    self.inner.child_registry.get(&parent).and_then(|children| {
-                                        children
-                                            .iter()
-                                            .find(|(_, child_name)| *child_name == orig_name)
-                                    })
-                                })
-                            {
-                                // remap
-                                **orig = *orig_child_inode;
-                                original_inode = None;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
+            for (old_ino, _) in old_inodes {
+                self.inner.unregister(old_ino, parent);
 
                 #[cfg(debug_assertions)]
-                self.ensure_unused(&block);
-
-                self.inner.inode_alloc.free(block);
+                self.ensure_unused(old_ino);
             }
         }
+
+        // TODO need to unregister stale child nodes under a directory that reuses its inode
     }
 
     #[cfg(debug_assertions)]
-    fn ensure_unused(&self, block: &InodeBlock) {
-        for inode in block.iter_all_without_allocating() {
+    fn ensure_unused(&self, inode: u64) {
+        assert!(
+            !self.inner.registry.contains_key(&inode),
+            "inode {} is in registry",
+            inode
+        );
+        assert!(
+            !self.inner.child_registry.contains_key(&inode),
+            "inode {} is in child registry",
+            inode
+        );
+        assert!(
+            !self.inner.parent_registry.contains_key(&inode),
+            "inode {} is in parent registry",
+            inode
+        );
+        for ty in DynamicStateType::iter() {
             assert!(
-                !self.inner.registry.contains_key(&inode),
-                "inode {} is in registry",
-                inode
+                !self.inner.dynamic_state.contains_key(&(inode, ty)),
+                "inode {} is in dynamic state registry with ty {:?}",
+                inode,
+                ty
             );
-            assert!(
-                !self.inner.child_registry.contains_key(&inode),
-                "inode {} is in child registry",
-                inode
-            );
-            assert!(
-                !self.inner.parent_registry.contains_key(&inode),
-                "inode {} is in parent registry",
-                inode
-            );
-            for ty in DynamicStateType::iter() {
-                assert!(
-                    !self.inner.dynamic_state.contains_key(&(inode, ty)),
-                    "inode {} is in dynamic state registry with ty {:?}",
-                    inode,
-                    ty
-                );
-            }
-            assert!(
-                !self.inner.phantom_registry.contains_key(&inode),
-                "inode {} is in phantom registry",
-                inode
-            );
-
-            if self.inode_remapping.contains_key(&inode) {
-                warn!("removed inode {} is mapped", inode);
-            }
-
-            if let Some((k, v)) = self.inode_remapping.iter().find(|(_, v)| **v == inode) {
-                warn!("removed inode {} is mapped to from {}", *v, *k);
-            }
         }
+        assert!(
+            !self.inner.phantom_registry.contains_key(&inode),
+            "inode {} is in phantom registry",
+            inode
+        );
     }
 
     pub fn ensure_generated(&mut self, state: &GameState, dynamics: DynamicInterest) {
         if let Some(phantom) = dynamics.phantom {
-            let mut inodes = self.inner.inode_alloc.allocate();
-
             // make new phantom dir
-            let phantom_dir = inodes.next().expect("no free inodes"); // should be at least 1
+            let phantom_dir = self.inner.inode_alloc.allocate();
             self.inner.register(
                 phantom_dir,
                 DirEntry::build()
@@ -453,17 +403,9 @@ impl FilesystemStructure {
             );
 
             // register entries under new phantom dir
-            self.register_dynamic_entries(
-                phantom.dyn_fn,
-                phantom_dir,
-                phantom.interest,
-                Some(inodes),
-                state,
-                None,
-            );
+            self.register_dynamic_entries(phantom.dyn_fn, phantom_dir, phantom.interest, state);
         }
 
-        let mut remapped_inode = dynamics.original_inode;
         for (inode, interest) in dynamics
             .inodes
             .into_iter()
@@ -486,27 +428,7 @@ impl FilesystemStructure {
                 }
             };
 
-            self.register_dynamic_entries(
-                dyn_fn,
-                inode,
-                interest,
-                None,
-                state,
-                if remapped_inode == dynamics.original_inode {
-                    Some(&mut remapped_inode)
-                } else {
-                    None
-                },
-            );
-        }
-
-        if remapped_inode != dynamics.original_inode {
-            self.inode_remapping
-                .insert(dynamics.original_inode, remapped_inode);
-            debug!(
-                "mapping {} to new {}",
-                dynamics.original_inode, remapped_inode
-            );
+            self.register_dynamic_entries(dyn_fn, inode, interest, state);
         }
     }
 
@@ -537,24 +459,6 @@ impl FilesystemStructure {
             current = *parent;
         }
     }
-
-    pub fn maintain(&mut self) {
-        const PERIOD: Duration = Duration::from_secs(30);
-        if self.last_maintain.elapsed() < PERIOD {
-            // dont bother too often
-            return;
-        }
-
-        self.last_maintain = Instant::now();
-
-        let prev = self.inode_remapping.len();
-        self.inode_remapping
-            .retain(|_, to| self.inner.registry.contains_key(to));
-        let new = self.inode_remapping.len();
-        if prev != new {
-            trace!("removed stale inode mappings, from {} to {}", prev, new);
-        }
-    }
 }
 
 impl DynamicInterest {
@@ -577,11 +481,7 @@ impl FilesystemStructureBuilder {
         entry: Entry,
         parent_info: Option<(u64, &'static str)>,
     ) -> u64 {
-        let inode = self
-            .inner
-            .static_inodes
-            .next()
-            .expect("exhausted static inodes");
+        let inode = self.inner.inode_alloc.allocate_static();
 
         self.inner.register(inode, entry, parent_info);
 
@@ -601,11 +501,7 @@ impl FilesystemStructureBuilder {
     }
 
     pub fn finish(self) -> FilesystemStructure {
-        FilesystemStructure {
-            inner: self.inner,
-            inode_remapping: HashMap::new(),
-            last_maintain: Instant::now(),
-        }
+        FilesystemStructure { inner: self.inner }
     }
 }
 
@@ -632,8 +528,8 @@ impl StructureInner {
         }
     }
 
-    /// Returns child name under root parent, if it was under the given root
-    fn unregister(&mut self, inode: u64, root_parent: u64) -> Option<Cow<'static, str>> {
+    fn unregister(&mut self, inode: u64, root_parent: u64) {
+        // TODO might not need to recurse
         let mut frontier = vec![inode];
         trace!("start unregistering from {}", inode);
         while let Some(next) = frontier.pop() {
@@ -649,13 +545,7 @@ impl StructureInner {
             if let Some(children) = self.child_registry.remove(&next) {
                 frontier.extend(children.iter().map(|(child, _)| *child));
                 for (child, _) in children {
-                    let parent = self.parent_registry.remove(&child);
-                    assert!(
-                        parent.is_some(),
-                        "child {} was not registered in parent registry under parent {}",
-                        child,
-                        next
-                    );
+                    let _ = self.parent_registry.remove(&child);
                 }
             }
 
@@ -667,13 +557,9 @@ impl StructureInner {
             .get_mut(&root_parent)
             .expect("child is not registered under parent");
 
-        let mut old_name = None;
         if let Some(idx) = children.iter().position(|(child, _)| *child == inode) {
-            let (_, name) = children.remove(idx);
-            old_name = Some(name)
+            let _ = children.remove(idx);
         }
-
-        old_name
     }
 
     fn add_child_to_parent(&mut self, parent: u64, child_name: Cow<'static, str>, child: u64) {
@@ -885,28 +771,22 @@ impl Entry {
 }
 
 impl<'a> DynamicDirRegistrationer<'a> {
-    pub fn new(
-        starting_inodes: Option<InodeBlock>,
-        parent: u64,
-        inodes: &'a mut InodeBlockAllocator,
-    ) -> Self {
+    fn new(parent: u64, structure: &'a mut FilesystemStructure) -> Self {
         Self {
-            entries: vec![],
-            current_block: starting_inodes.unwrap_or_else(|| inodes.allocate()),
-            all_blocks: smallvec![],
-            inodes,
+            new_entries: vec![],
+            to_retain: HashSet::new(),
+            structure,
             parent,
         }
     }
 
-    pub fn take(
-        mut self,
+    pub fn take_entries(
+        self,
     ) -> (
-        Vec<(u64, Cow<'static, str>, Entry, Option<u64>)>,
-        SmallVec<[InodeBlock; 2]>,
+        Vec<(u64, Cow<'static, str>, Entry, u64)>,
+        HashSet<(u64, u64)>,
     ) {
-        self.all_blocks.push(self.current_block);
-        (self.entries, self.all_blocks)
+        (self.new_entries, self.to_retain)
     }
 
     pub fn add_root_entry(
@@ -914,7 +794,7 @@ impl<'a> DynamicDirRegistrationer<'a> {
         name: impl Into<Cow<'static, str>>,
         entry: impl Into<Entry>,
     ) -> u64 {
-        self.add_entry_raw(None, name.into(), entry.into())
+        self.add_entry_raw(self.parent, name.into(), entry.into())
     }
 
     pub fn add_entry(
@@ -923,25 +803,192 @@ impl<'a> DynamicDirRegistrationer<'a> {
         name: impl Into<Cow<'static, str>>,
         entry: impl Into<Entry>,
     ) -> u64 {
-        self.add_entry_raw(Some(parent), name.into(), entry.into())
+        self.add_entry_raw(parent, name.into(), entry.into())
     }
 
-    fn add_entry_raw(&mut self, parent: Option<u64>, name: Cow<'static, str>, entry: Entry) -> u64 {
-        let inode = self.alloc_inode();
-        self.entries.push((inode, name, entry, parent));
-        inode
-    }
+    fn add_entry_raw(&mut self, parent: u64, name: Cow<'static, str>, entry: Entry) -> u64 {
+        trace!("adding raw dynamic entry under {}: {:?}", parent, name);
 
-    fn alloc_inode(&mut self) -> u64 {
-        self.current_block.next().unwrap_or_else(|| {
-            let new_block = self.inodes.allocate();
-            let consumed = std::mem::replace(&mut self.current_block, new_block);
-            self.all_blocks.push(consumed);
-            self.current_block.next().unwrap() // not empty
-        })
+        // TODO put unwrap into try_get_inode again
+        match self.structure.lookup_child(parent, name.as_ref().as_ref()) {
+            Some((prev_inode, prev_entry)) if &entry == prev_entry => {
+                // identical entry, reuse inode
+                trace!("identical entry found at {}! reusing it", prev_inode);
+                self.to_retain.insert((prev_inode, parent));
+                prev_inode
+            }
+            _ => {
+                let inode = self.structure.inner.inode_alloc.allocate();
+                trace!("new inode: {}", inode);
+                self.new_entries.push((inode, name, entry, parent));
+                inode
+            }
+        }
     }
 
     pub fn parent(&self) -> u64 {
         self.parent
+    }
+}
+
+mod entry_impls {
+    use std::fmt::Formatter;
+
+    use super::*;
+
+    macro_rules! cmp_fn_ptrs {
+        ($a:expr, $b:expr) => {
+            match ($a, $b) {
+                (Some(a), Some(b)) => std::ptr::eq(a as *const (), b as *const ()),
+                (None, None) => true,
+                _ => false,
+            }
+        };
+    }
+
+    #[derive(Debug)]
+    #[repr(C)]
+    struct SplitFatPtr {
+        data: *const (),
+        vtable: *const (),
+    }
+
+    impl SplitFatPtr {
+        unsafe fn split<T: ?Sized>(ptr: *const T) -> SplitFatPtr {
+            let ptr_ref: *const *const T = &ptr;
+            let decomp_ref = ptr_ref as *const [usize; 2];
+            std::mem::transmute(*decomp_ref)
+        }
+    }
+
+    impl PartialEq for FileEntry {
+        fn eq(&self, other: &Self) -> bool {
+            self.behaviour == other.behaviour
+                && self.associated_data == other.associated_data
+                && cmp_fn_ptrs!(self.filter, other.filter)
+        }
+    }
+
+    impl PartialEq for DirEntry {
+        fn eq(&self, other: &Self) -> bool {
+            self.associated_data == other.associated_data
+                && cmp_fn_ptrs!(self.filter, other.filter)
+                && match (self.dynamic, other.dynamic) {
+                    (Some((ty_a, fn_a)), Some((ty_b, fn_b))) => {
+                        ty_a == ty_b && std::ptr::eq(fn_a as *const (), fn_b as *const ())
+                    }
+                    (None, None) => true,
+                    _ => false,
+                }
+        }
+    }
+
+    impl PartialEq for LinkEntry {
+        fn eq(&self, other: &Self) -> bool {
+            let (a, b) = unsafe {
+                (
+                    SplitFatPtr::split(self.target.as_ref()),
+                    SplitFatPtr::split(other.target.as_ref()),
+                )
+            };
+            std::ptr::eq(a.vtable, b.vtable) && cmp_fn_ptrs!(self.filter, other.filter)
+        }
+    }
+
+    macro_rules! debug_fn {
+        ($opt_fn:expr) => {
+            $opt_fn.map(|func| func as *const ())
+        };
+    }
+
+    impl Debug for FileEntry {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("File")
+                .field("behaviour", &self.behaviour)
+                .field("associated_data", &self.associated_data)
+                .field("filter", &debug_fn!(self.filter))
+                .finish()
+        }
+    }
+
+    impl Debug for DirEntry {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("Dir")
+                .field(
+                    "dynamic",
+                    &self
+                        .dynamic
+                        .as_ref()
+                        .map(|(ty, func)| (ty, *func as *const ())),
+                )
+                .field("associated_data", &self.associated_data)
+                .field("filter", &debug_fn!(self.filter))
+                .finish()
+        }
+    }
+
+    impl Debug for Entry {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Entry::File(e) => Debug::fmt(e, f),
+                Entry::Dir(e) => Debug::fmt(e, f),
+                Entry::Link(_) => write!(f, "Link(..)"),
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn fn_comparison() {
+            fn a(_: i32) -> i32 {
+                2
+            }
+            fn b(_: i32) -> i32 {
+                5
+            }
+
+            type MyFn = fn(i32) -> i32;
+            let a1_ = a as MyFn;
+            let a2_ = a as MyFn;
+            let b_ = b as MyFn;
+
+            assert!(cmp_fn_ptrs!(Some(a1_), Some(a1_)));
+            assert!(cmp_fn_ptrs!(Some(a1_), Some(a2_)));
+            assert!(!cmp_fn_ptrs!(Some(a1_), Some(b_)));
+
+            assert!(!cmp_fn_ptrs!(Some(a1_), Option::<MyFn>::None));
+            assert!(cmp_fn_ptrs!(Option::<MyFn>::None, Option::<MyFn>::None));
+        }
+
+        #[test]
+        fn file_entry_comparison() {
+            let a = FileEntry::build()
+                .behaviour(FileBehaviour::ReadWrite(
+                    CommandType::EntityHealth,
+                    BodyType::Float,
+                ))
+                .finish();
+            let b = FileEntry::build()
+                .behaviour(FileBehaviour::ReadWrite(
+                    CommandType::EntityHealth,
+                    BodyType::Float,
+                ))
+                .finish();
+            assert_eq!(a, b);
+        }
+
+        #[test]
+        fn dir_entry_comparison() {
+            let a = DirEntry::build()
+                .associated_data(EntryAssociatedData::PlayerId)
+                .finish();
+            let b = DirEntry::build()
+                .associated_data(EntryAssociatedData::PlayerId)
+                .finish();
+            assert_eq!(a, b);
+        }
     }
 }

@@ -34,7 +34,6 @@ table StateResponse {
 struct EntityDetails {
     id:int32;
     living:bool;
-    alive:bool;
 }
 
 table BlockDetails {

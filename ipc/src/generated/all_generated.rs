@@ -863,7 +863,6 @@ pub mod mcfs {
             f.debug_struct("EntityDetails")
                 .field("id", &self.id())
                 .field("living", &self.living())
-                .field("alive", &self.alive())
                 .finish()
         }
     }
@@ -924,11 +923,10 @@ pub mod mcfs {
     }
     impl<'a> EntityDetails {
         #[allow(clippy::too_many_arguments)]
-        pub fn new(id: i32, living: bool, alive: bool) -> Self {
+        pub fn new(id: i32, living: bool) -> Self {
             let mut s = Self([0; 8]);
             s.set_id(id);
             s.set_living(living);
-            s.set_alive(alive);
             s
         }
 
@@ -975,30 +973,6 @@ pub mod mcfs {
                 core::ptr::copy_nonoverlapping(
                     &x_le as *const bool as *const u8,
                     self.0[4..].as_mut_ptr(),
-                    core::mem::size_of::<bool>(),
-                );
-            }
-        }
-
-        pub fn alive(&self) -> bool {
-            let mut mem = core::mem::MaybeUninit::<bool>::uninit();
-            unsafe {
-                core::ptr::copy_nonoverlapping(
-                    self.0[5..].as_ptr(),
-                    mem.as_mut_ptr() as *mut u8,
-                    core::mem::size_of::<bool>(),
-                );
-                mem.assume_init()
-            }
-            .from_little_endian()
-        }
-
-        pub fn set_alive(&mut self, x: bool) {
-            let x_le = x.to_little_endian();
-            unsafe {
-                core::ptr::copy_nonoverlapping(
-                    &x_le as *const bool as *const u8,
-                    self.0[5..].as_mut_ptr(),
                     core::mem::size_of::<bool>(),
                 );
             }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from signal import signal, SIGPIPE, SIG_DFL
 from typing import ClassVar, Optional
@@ -47,17 +47,23 @@ class Minecraft:
             print(f"error: {e}")
             exit(1)
 
-    def player(self) -> Optional[Entity]:
+    def player(self) -> Optional[EntityProxy]:
         try:
             entity = (self.mnt / "player" / "entity").resolve()
             world_name = (self.mnt / "player" / "world").readlink().name
 
             entity_id = int(entity.name)
-            entity_ty = self._read(entity / "type")
-            entity_pos = Position.from_string(self._read(entity / "position"))
-            return Entity(entity_id, entity_ty, entity_pos, world_name, mc=self)
+            return EntityProxy(self, world_name, entity_id)
         except Exception:
             return None
+
+    def entity(self, entity_id: int, world=None) -> Optional[EntityProxy]:
+        if world is not None:
+            world_name = world
+        else:
+            world_name = (self.mnt / "player" / "world").readlink().name
+
+        return EntityProxy(self, world_name, entity_id)
 
     def iter_entities(self, living_filter=None, world=None):
         if world is not None:
@@ -66,43 +72,34 @@ class Minecraft:
         else:
             world = self.mnt / "player" / "world"
             world_name = world.readlink().name
+
         entities = world / "entities" / "by-id"
         use_living_filter = isinstance(living_filter, bool)
 
         for entity in entities.glob("*"):
             try:
-                alive = self._exists(entity / "alive")
-                if not alive:
-                    continue
-
                 living = self._exists(entity / "living")
                 if use_living_filter and living != living_filter:
                     continue
 
-                # TODO lazily evaluate fields? needs to remember its world
                 entity_id = int(entity.name)
-                entity_ty = self._read(entity / "type")
-                entity_pos = Position.from_string(self._read(entity / "position"))
-                yield Entity(entity_id, entity_ty, entity_pos, world_name, mc=self)
+                yield EntityProxy(self, world_name, entity_id)
             except IoException:
                 pass
 
-    # TODO block proxy object to get and set on
-    def set_block(self, world: str, pos: BlockPos, new_block: str):
-        path = self.mnt / "worlds" / world / "blocks" / repr(pos) / "type"
-        self._write(path, new_block)
-
-
+    def block(self, world: str, pos: BlockPos) -> BlockProxy:
+        return BlockProxy(self, world, pos)
 
     def _read(self, p: Path) -> str:
         try:
             return p.read_text()
         except OSError as e:
-            raise IoException(self, p, e, "check existence of")
+            raise IoException(self, p, e, "read")
 
-    def _write(self, p: Path, text: str):
+    def _write(self, p: Path, text: str, truncate=False):
         try:
-            p.write_text(text)
+            with p.open("w" if truncate else "a") as f:
+                f.write(text)
         except OSError as e:
             raise IoException(self, p, e, "write")
 
@@ -110,7 +107,7 @@ class Minecraft:
         try:
             return p.exists()
         except OSError as e:
-            raise IoException(self, p, e, "read")
+            raise IoException(self, p, e, "check existence of")
 
 
 @dataclass
@@ -135,6 +132,7 @@ class Position:
     def __repr__(self):
         return f"{self.x},{self.y},{self.z}"
 
+
 @dataclass
 class BlockPos:
     x: int
@@ -155,21 +153,72 @@ class BlockPos:
         return f"{self.x},{self.y},{self.z}"
 
 
-@dataclass
-class Entity:
-    id: int
-    type: str
-    pos: Position
-    world: str
-    mc: Minecraft = field(repr=False)
+class EntityProxy:
+    def __init__(self, mc: Minecraft, world: str, id: int) -> EntityProxy:
+        print(f"entity with id {id}")
+        self._world = world
+        self._id = id
+        self._mc = mc
+        self._path = mc.mnt / "worlds" / world / "entities" / "by-id" / str(self._id)
 
-    def teleport(self, target: Position):
+    @property
+    def id(self) -> int:
+        return self._id
+
+    @property
+    def entity_type(self) -> int:
+        path = self._path / "type"
+        return self._mc._read(path)
+
+    @property
+    def position(self) -> Position:
+        print(f"get pos for {self.id}")
+        path = self._path / "position"
+        return Position.from_string(self._mc._read(path))
+
+    @position.setter
+    def position(self, value: Position):
         """
         Position is treated as if it's in the same world
         """
-        path = self.mc.mnt / "worlds" / self.world / "entities" / "by-id" / str(self.id) / "position"
-        self.mc._write(path, repr(target))
+        print(f"set pos for {self.id}")
+        path = self._path / "position"
+        self._mc._write(path, repr(value))
+
+    @property
+    def health(self) -> float:
+        path = self._path / "health"
+        return float(self._mc._read(path))
+
+    @position.setter
+    def health(self, value: float):
+        path = self._path / "health"
+        self._mc._write(path, str(value))
+
+    def teleport(self, target: Position):
+        self.position = target
 
     def kill(self):
-        path = self.mc.mnt / "worlds" / self.world / "entities" / "by-id" / str(self.id) / "health"
-        self.mc._write(path, "0")
+        self.health = 0
+
+
+class BlockProxy:
+    def __init__(self, mc: Minecraft, world: str, pos: BlockPos) -> BlockProxy:
+        self._world = world
+        self._pos = pos
+        self._mc = mc
+        self._path = mc.mnt / "worlds" / world / "blocks" / repr(self._pos)
+
+    @property
+    def pos(self):
+        return self._pos
+
+    @property
+    def block_type(self) -> str:
+        path = self._path / "type"
+        return self._mc._read(path)
+
+    @block_type.setter
+    def block_type(self, value: str):
+        path = self._path / "type"
+        self._mc._write(path, value)

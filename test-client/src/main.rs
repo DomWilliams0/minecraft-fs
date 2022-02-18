@@ -4,7 +4,6 @@ use std::iter::once;
 
 use flatbuffers::FlatBufferBuilder;
 use log::*;
-
 use rand::{thread_rng, Rng};
 
 use ipc::generated::{
@@ -34,7 +33,7 @@ enum ClientCommandResponse {
 }
 
 enum ClientResponse {
-    Command(ClientCommandResponse),
+    Command(Option<ClientCommandResponse>),
     State { target_block: Option<BlockPos> },
 }
 
@@ -61,29 +60,31 @@ fn handle_client(mut client: ConnectedIpcClient) -> Result<(), Box<dyn StdError>
 
         let resp_body_type;
         let resp = if let Some(cmd) = msg.body_as_command() {
-            if cmd.write().is_some() {
-                // no response for write commands
-                continue;
-            }
-
             resp_body_type = GameResponseBody::Response;
-            ClientResponse::Command(match cmd.cmd() {
-                CommandType::PlayerName => ClientCommandResponse::String("TestPlayer".into()),
-                CommandType::EntityType => ClientCommandResponse::String("Cow".into()),
-                CommandType::EntityPosition => {
-                    ClientCommandResponse::Vec(Vec3::new(100.0, 64.0, 205.2))
-                }
-                CommandType::EntityHealth => match target_entity(&cmd) {
-                    Ok(_) => ClientCommandResponse::Float(10.0),
-                    Err(err) => ClientCommandResponse::Error(err),
-                },
-                CommandType::BlockType => ClientCommandResponse::String("minecraft:dirt".into()),
-                CommandType::WorldTime => ClientCommandResponse::Int(500),
-                CommandType::ControlSay | CommandType::ControlJump | CommandType::ControlMove => {
-                    continue
-                }
-                _ => ClientCommandResponse::Error(Error::UnknownCommand),
-            })
+
+            if cmd.write().is_some() {
+                ClientResponse::Command(None)
+            } else {
+                ClientResponse::Command(Some(match cmd.cmd() {
+                    CommandType::PlayerName => ClientCommandResponse::String("TestPlayer".into()),
+                    CommandType::EntityType => ClientCommandResponse::String("Cow".into()),
+                    CommandType::EntityPosition => {
+                        ClientCommandResponse::Vec(Vec3::new(100.0, 64.0, 205.2))
+                    }
+                    CommandType::EntityHealth => match target_entity(&cmd) {
+                        Ok(_) => ClientCommandResponse::Float(10.0),
+                        Err(err) => ClientCommandResponse::Error(err),
+                    },
+                    CommandType::BlockType => {
+                        ClientCommandResponse::String("minecraft:dirt".into())
+                    }
+                    CommandType::WorldTime => ClientCommandResponse::Int(500),
+                    CommandType::ControlSay
+                    | CommandType::ControlJump
+                    | CommandType::ControlMove => continue,
+                    _ => ClientCommandResponse::Error(Error::UnknownCommand),
+                }))
+            }
         } else if let Some(req) = msg.body_as_state_request() {
             resp_body_type = GameResponseBody::StateResponse;
             ClientResponse::State {
@@ -97,13 +98,14 @@ fn handle_client(mut client: ConnectedIpcClient) -> Result<(), Box<dyn StdError>
             ClientResponse::Command(resp) => {
                 let mut body = ResponseArgs::default();
                 match &resp {
-                    ClientCommandResponse::Error(val) => body.error = Some(*val),
-                    ClientCommandResponse::Float(val) => body.float = Some(*val),
-                    ClientCommandResponse::Int(val) => body.int = Some(*val),
-                    ClientCommandResponse::String(val) => {
+                    Some(ClientCommandResponse::Error(val)) => body.error = Some(*val),
+                    Some(ClientCommandResponse::Float(val)) => body.float = Some(*val),
+                    Some(ClientCommandResponse::Int(val)) => body.int = Some(*val),
+                    Some(ClientCommandResponse::String(val)) => {
                         body.string = Some(buf.create_string(val));
                     }
-                    ClientCommandResponse::Vec(val) => body.vec = Some(val),
+                    Some(ClientCommandResponse::Vec(val)) => body.vec = Some(val),
+                    None => {}
                 }
                 Response::create(&mut buf, &body).as_union_value()
             }
@@ -122,15 +124,12 @@ fn handle_client(mut client: ConnectedIpcClient) -> Result<(), Box<dyn StdError>
 
                 let mut rand = thread_rng();
                 let n = rand.gen_range(3..10);
-                let entities = once(EntityDetails::new(0, true, true))
-                    .chain((1usize..n).map(|_| {
-                        EntityDetails::new(
-                            rand.gen_range(1..100),
-                            rand.gen_bool(0.5),
-                            rand.gen_bool(0.9),
-                        )
-                    }))
-                    .collect::<Vec<_>>();
+                let entities =
+                    once(EntityDetails::new(0, true))
+                        .chain((1usize..n).map(|_| {
+                            EntityDetails::new(rand.gen_range(1..100), rand.gen_bool(0.5))
+                        }))
+                        .collect::<Vec<_>>();
 
                 let state = StateResponseArgs {
                     player_entity_id: Some(0),

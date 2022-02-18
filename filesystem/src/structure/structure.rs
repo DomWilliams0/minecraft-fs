@@ -311,16 +311,6 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, ty: Entity
                     .finish(),
             );
         }
-
-        if details.alive() {
-            reg.add_entry(
-                entity_dir,
-                "alive",
-                FileEntry::build()
-                    .behaviour(FileBehaviour::ForShow)
-                    .finish(),
-            );
-        }
     }
 }
 

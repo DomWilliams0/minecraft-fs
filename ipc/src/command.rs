@@ -2,7 +2,7 @@ use crate::generated::{BlockPos, CommandType, Dimension};
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum BodyType {
     Integer,
     String,

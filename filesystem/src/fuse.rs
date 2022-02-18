@@ -59,7 +59,6 @@ impl fuser::Filesystem for MinecraftFs {
         trace!("getattr({})", ino);
         let attr = match self.structure.lookup_inode(ino) {
             Some(entry) => self.mk_attr(ino, entry),
-
             None => return reply.error(libc::ENOENT),
         };
 
@@ -147,7 +146,10 @@ impl fuser::Filesystem for MinecraftFs {
 
         let file = match self.structure.lookup_inode(ino) {
             Some(Entry::File(f)) => f,
-            _ => return reply.error(libc::ENOENT),
+            _ => {
+                trace!("NO FILE");
+                return reply.error(libc::ENOENT);
+            }
         };
 
         let (cmd, resp) = match file.behaviour() {
@@ -233,11 +235,6 @@ impl fuser::Filesystem for MinecraftFs {
         offset: i64,
         mut reply: ReplyDirectory,
     ) {
-        if offset == 0 {
-            // this happens occasionally but not too often
-            self.structure.maintain();
-        }
-
         trace!("readdir(ino={}, fh={}, offset={})", ino, fh, offset);
 
         let _dir = match self.structure.lookup_inode(ino) {

@@ -192,10 +192,11 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
             val bounds = -100_000.0
             val box = Box(Vec3d(-bounds, -bounds, -bounds), Vec3d(bounds, bounds, bounds))
             val entities = world.getOtherEntities(null, box)
+                .filter { e -> e.isAlive }
 
             StateResponse.startEntitiesVector(responseBuilder, entities.size)
             for (e in entities) {
-                EntityDetails.createEntityDetails(responseBuilder, e.id, e.isLiving, e.isAlive)
+                EntityDetails.createEntityDetails(responseBuilder, e.id, e.isLiving)
             }
             responseBuilder.endVector()
         } else {

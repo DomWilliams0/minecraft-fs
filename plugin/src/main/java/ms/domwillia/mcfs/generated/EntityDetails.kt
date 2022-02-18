@@ -19,12 +19,10 @@ class EntityDetails : Struct() {
     }
     val id : Int get() = bb.getInt(bb_pos + 0)
     val living : Boolean get() = 0.toByte() != bb.get(bb_pos + 4)
-    val alive : Boolean get() = 0.toByte() != bb.get(bb_pos + 5)
     companion object {
-        fun createEntityDetails(builder: FlatBufferBuilder, id: Int, living: Boolean, alive: Boolean) : Int {
+        fun createEntityDetails(builder: FlatBufferBuilder, id: Int, living: Boolean) : Int {
             builder.prep(4, 8)
-            builder.pad(2)
-            builder.putBoolean(alive)
+            builder.pad(3)
             builder.putBoolean(living)
             builder.putInt(id)
             return builder.offset()

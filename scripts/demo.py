@@ -10,9 +10,11 @@ def tp_all():
 
     for e in mc.iter_entities():
         try:
-            e.teleport(player.pos)
+            e.teleport(player.position)
+            print(f"teleported {e.id}")
         except IoException as exc:
             print(f"failed to tp {e.id}: {exc}")
+            raise exc
 
 
 def kill_all_other_than_player():
@@ -36,11 +38,12 @@ def blocks():
     pos = player.pos.to_block_pos()
     pos.y -= 1
 
-    sz = 4
+    sz = 3
     for dx in range(-sz, sz):
         for dz in range(-sz, sz):
-            block = BlockPos(pos.x + dx, pos.y, pos.z + dz)
-            mc.set_block(player.world, block, "diamond_block")
+            block_pos = BlockPos(pos.x + dx, pos.y, pos.z + dz)
+            block = mc.block(player.world, block_pos)
+            block.block_type = "cobblestone"
 
 
 if __name__ == '__main__':
