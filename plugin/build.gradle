@@ -2,6 +2,7 @@ plugins {
     id 'fabric-loom' version '0.10-SNAPSHOT'
     id 'maven-publish'
     id 'org.jetbrains.kotlin.jvm' version '1.5.31'
+    id "com.github.johnrengelman.shadow" version "7.0.0"
 }
 
 version = project.mod_version
@@ -14,6 +15,10 @@ repositories {
     // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
     // See https://docs.gradle.org/current/userguide/declaring_repositories.html
     // for more information about repositories.
+}
+
+configurations {
+    shadowCommon
 }
 
 dependencies {
@@ -30,7 +35,16 @@ dependencies {
     // You may need to force-disable transitiveness on them.
 
     // https://mvnrepository.com/artifact/com.google.flatbuffers/flatbuffers-java
-    implementation group: 'com.google.flatbuffers', name: 'flatbuffers-java', version: '2.0.3'
+    implementation 'com.google.flatbuffers:flatbuffers-java:2.0.3'
+    shadowCommon 'com.google.flatbuffers:flatbuffers-java:2.0.3'
+}
+shadowJar {
+    configurations = [project.configurations.shadowCommon]
+}
+
+remapJar {
+    input.set shadowJar.archiveFile
+    dependsOn shadowJar
 }
 
 processResources {

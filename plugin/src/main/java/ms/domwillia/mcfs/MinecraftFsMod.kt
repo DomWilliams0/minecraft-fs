@@ -7,8 +7,6 @@ import java.io.IOException
 import kotlin.io.path.exists
 
 class MinecraftFsMod : ModInitializer {
-
-
     override fun onInitialize() = try {
         // close on shutdown
         Runtime.getRuntime().addShutdownHook(Thread {
@@ -25,7 +23,7 @@ class MinecraftFsMod : ModInitializer {
                 LOGGER.info("Initialising IPC")
                 val thread = reinit()
 
-                while (thread.isAlive && socketPath.exists() ) {
+                while (thread.isAlive && socketPath.exists()) {
                     Thread.sleep(1000)
                 }
 
