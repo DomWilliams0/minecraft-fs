@@ -8,7 +8,7 @@ use crate::structure::registry::{
     DynamicDirRegistrationer, DynamicStateType, FilesystemStructureBuilder, PhantomChildType,
 };
 use crate::structure::FileBehaviour::*;
-use crate::structure::{FileBehaviour, FilesystemStructure};
+use crate::structure::{EntryFilterResult, FileBehaviour, FilesystemStructure};
 
 #[allow(unused_variables)]
 pub fn create_structure() -> FilesystemStructure {
@@ -32,7 +32,7 @@ fn player_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
         "player",
         DirEntry::build()
             .associated_data(EntryAssociatedData::PlayerId)
-            .dynamic(DynamicStateType::PlayerId, |_, reg| {
+            .dynamic(DynamicStateType::PlayerId, |state, reg| {
                 mk_entity_dir(reg, reg.parent(), EntityType::SpecificallyPlayer);
             })
             .finish(),
@@ -71,7 +71,19 @@ fn player_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
         .finish(),
     );
 
-    let control = builder.add_entry(dir, "control", DirEntry::default());
+    let control = builder.add_entry(
+        dir,
+        "control",
+        DirEntry::build()
+            .filter(|state| {
+                if state.is_in_game() {
+                    EntryFilterResult::IncludeAllChildren
+                } else {
+                    EntryFilterResult::Exclude
+                }
+            })
+            .finish(),
+    );
     builder.add_entry(
         control,
         "say",
@@ -281,6 +293,7 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, ty: Entity
         "health",
         FileEntry::build()
             .behaviour(ReadWrite(CommandType::EntityHealth, Float))
+            .filter(|state| state.is_in_game())
             .finish(),
     );
     reg.add_entry(
@@ -288,6 +301,7 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, ty: Entity
         "position",
         FileEntry::build()
             .behaviour(ReadWrite(CommandType::EntityPosition, Position))
+            .filter(|state| state.is_in_game())
             .finish(),
     );
 
@@ -297,6 +311,7 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, ty: Entity
             "type",
             FileEntry::build()
                 .behaviour(ReadOnly(CommandType::EntityType, String))
+                .filter(|state| state.is_in_game())
                 .finish(),
         );
 
@@ -306,6 +321,7 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, ty: Entity
                 "living",
                 FileEntry::build()
                     .behaviour(FileBehaviour::ForShow)
+                    .filter(|state| state.is_in_game())
                     .finish(),
             );
         }
