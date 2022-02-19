@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fmt::Debug;
+use std::panic::AssertUnwindSafe;
 use std::time::{Duration, Instant};
 
 use log::*;
@@ -138,10 +139,12 @@ impl FilesystemStructure {
         self.inner.registry.get(&inode)
     }
 
+    fn try_get_inode(&self, inode: u64) -> Option<&Entry> {
+        self.inner.registry.get(&inode)
+    }
+
     fn get_inode(&self, inode: u64) -> &Entry {
-        self.inner
-            .registry
-            .get(&inode)
+        self.try_get_inode(inode)
             .unwrap_or_else(|| panic!("unregistered inode {}", inode,))
     }
 
@@ -179,7 +182,10 @@ impl FilesystemStructure {
         let mut interest = GameStateInterest::default();
 
         self.walk_ancestors(inode, |ancestor| {
-            let entry = self.get_inode(ancestor);
+            let entry = match self.try_get_inode(ancestor) {
+                Some(e) => e,
+                None => return,
+            };
 
             match entry {
                 Entry::Dir(dir) => {
@@ -377,6 +383,64 @@ impl FilesystemStructure {
         );
     }
 
+    #[cfg(debug_assertions)]
+    fn ensure_valid_state(&self) {
+        let mut current_ino = None;
+        let mut current_parent = None;
+
+        let res = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            for (ino, _) in self.inner.registry.iter() {
+                current_ino = Some(*ino);
+                current_parent = None;
+
+                // 1 is root
+                if *ino != 1 {
+                    let parent = self
+                        .inner
+                        .parent_registry
+                        .get(ino)
+                        .expect("missing registration of parent");
+                    current_parent = Some(*parent);
+                    let parents_children = self
+                        .inner
+                        .child_registry
+                        .get(parent)
+                        .expect("parent is missing child registration");
+
+                    parents_children
+                        .iter()
+                        .find(|(child_ino, _)| *child_ino == *ino)
+                        .expect("child is not in parent's children");
+                }
+            }
+
+            current_parent = None;
+
+            for inode in self.inner.phantom_registry.keys() {
+                current_ino = Some(*inode);
+                assert!(
+                    self.inner.registry.contains_key(inode),
+                    "phantom inode is not registered"
+                )
+            }
+
+            for (inode, _) in self.inner.dynamic_state.keys() {
+                current_ino = Some(*inode);
+                assert!(
+                    self.inner.registry.contains_key(inode),
+                    "dynamic inode is not registered"
+                )
+            }
+        }));
+
+        if res.is_err() {
+            panic!(
+                "assertion panic: inode={:?}, parent={:?}",
+                current_ino, current_parent
+            )
+        }
+    }
+
     pub fn ensure_generated(&mut self, state: &GameState, dynamics: DynamicInterest) {
         if let Some(phantom) = dynamics.phantom {
             // make new phantom dir
@@ -418,6 +482,9 @@ impl FilesystemStructure {
 
             self.register_dynamic_entries(dyn_fn, inode, interest, state);
         }
+
+        #[cfg(debug_assertions)]
+        self.ensure_valid_state()
     }
 
     pub fn command_state_for_file(&self, file: u64) -> CommandState {

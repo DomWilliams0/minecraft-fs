@@ -23,7 +23,6 @@ pub struct MinecraftFs {
     structure: FilesystemStructure,
 }
 
-// TODO this might be able to be much longer
 const TTL: Duration = Duration::from_secs(1);
 
 impl fuser::Filesystem for MinecraftFs {
