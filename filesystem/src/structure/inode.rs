@@ -28,8 +28,8 @@ impl InodeBlockAllocator {
         let new = self.next_dyn + 1;
         std::mem::replace(&mut self.next_dyn, new)
     }
-}
 
-pub fn is_inode_static(inode: u64) -> bool {
-    inode < STATIC_MAX
+    pub fn is_static(inode: u64) -> bool {
+        inode < STATIC_MAX
+    }
 }

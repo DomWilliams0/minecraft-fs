@@ -2,15 +2,13 @@ use ipc::generated::{CommandType, Dimension, EntityDetails};
 use ipc::BodyType;
 use ipc::BodyType::*;
 
+use crate::structure::entry::{DirEntry, EntryAssociatedData, FileEntry, LinkEntry};
 use crate::structure::registry::EntryFilterResult::{Exclude, IncludeAllChildren};
 use crate::structure::registry::{
-    DynamicDirRegistrationer, DynamicStateType, FilesystemStructureBuilder, LinkEntry,
-    PhantomChildType,
+    DynamicDirRegistrationer, DynamicStateType, FilesystemStructureBuilder, PhantomChildType,
 };
 use crate::structure::FileBehaviour::*;
-use crate::structure::{
-    DirEntry, EntryAssociatedData, FileBehaviour, FileEntry, FilesystemStructure,
-};
+use crate::structure::{FileBehaviour, FilesystemStructure};
 
 #[allow(unused_variables)]
 pub fn create_structure() -> FilesystemStructure {

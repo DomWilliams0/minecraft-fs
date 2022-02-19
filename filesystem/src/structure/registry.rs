@@ -8,11 +8,14 @@ use log::*;
 use smallvec::SmallVec;
 use strum::{EnumIter, IntoEnumIterator};
 
-use ipc::generated::{BlockPos, CommandType, Dimension};
-use ipc::{BodyType, CommandState, TargetEntity};
+use ipc::generated::{BlockPos, CommandType};
+use ipc::{BodyType, CommandState};
 
 use crate::state::{GameState, GameStateInterest};
-use crate::structure::inode::{is_inode_static, InodeBlockAllocator};
+use crate::structure::entry::{
+    DirEntry, DynamicDirFn, Entry, EntryAssociatedData, PhantomDynamicInterestFn,
+};
+use crate::structure::inode::InodeBlockAllocator;
 
 pub struct FilesystemStructure {
     inner: StructureInner,
@@ -60,13 +63,6 @@ struct DynamicState {
     time_collected: Instant,
 }
 
-#[derive(PartialEq)]
-pub enum Entry {
-    File(FileEntry),
-    Dir(DirEntry),
-    Link(LinkEntry),
-}
-
 pub struct DynamicDirRegistrationer<'a> {
     /// (inode, name, entry, parent)
     new_entries: Vec<(u64, Cow<'static, str>, Entry, u64)>,
@@ -75,39 +71,6 @@ pub struct DynamicDirRegistrationer<'a> {
     structure: &'a mut FilesystemStructure,
     parent: u64,
 }
-
-pub type DynamicDirFn = fn(&GameState, &mut DynamicDirRegistrationer);
-
-pub type PhantomDynamicInterestFn = fn(PhantomChildType) -> DynamicStateType;
-
-pub type FileFilterFn = fn(&GameState) -> bool;
-pub type DirFilterFn = fn(&GameState) -> EntryFilterResult;
-
-#[derive(Default)]
-pub struct DirEntry {
-    dynamic: Option<(DynamicStateType, DynamicDirFn)>,
-    associated_data: Option<EntryAssociatedData>,
-    filter: Option<DirFilterFn>,
-}
-
-#[derive(Default)]
-pub struct FileEntry {
-    behaviour: Option<FileBehaviour>,
-    associated_data: Option<EntryAssociatedData>,
-    filter: Option<FileFilterFn>,
-}
-
-pub type LinkTargetFn = Box<dyn Fn(&GameState) -> Option<Cow<'static, str>> + Send>;
-pub struct LinkEntry {
-    target: LinkTargetFn,
-    filter: Option<FileFilterFn>,
-}
-
-#[derive(Default)]
-pub struct DirEntryBuilder(DirEntry);
-#[derive(Default)]
-pub struct FileEntryBuilder(FileEntry);
-pub struct LinkEntryBuilder(LinkEntry);
 
 #[derive(Copy, Clone)]
 pub enum EntryFilterResult {
@@ -125,14 +88,6 @@ pub enum FileBehaviour {
     Static(Cow<'static, str>),
     /// Not readable or writable
     ForShow,
-}
-
-#[derive(PartialEq, Debug)]
-pub enum EntryAssociatedData {
-    PlayerId,
-    EntityId(i32),
-    World(Dimension),
-    Block(BlockPos),
 }
 
 pub struct DynamicInterest {
@@ -228,16 +183,16 @@ impl FilesystemStructure {
 
             match entry {
                 Entry::Dir(dir) => {
-                    if let Some((interest, _)) = dir.dynamic {
+                    if let Some((interest, _)) = dir.dynamic() {
                         dynamics_required.push((DynamicInode::Inode(ancestor), interest));
                     }
 
-                    if let Some(data) = dir.associated_data.as_ref() {
+                    if let Some(data) = dir.associated_data() {
                         data.apply_to_interest(&mut interest)
                     }
                 }
                 Entry::File(f) => {
-                    if let Some(data) = f.associated_data.as_ref() {
+                    if let Some(data) = f.associated_data() {
                         data.apply_to_interest(&mut interest)
                     }
                 }
@@ -366,7 +321,7 @@ impl FilesystemStructure {
                 .expect("dir was not retained");
             for (child_ino, child_name) in children {
                 let key = (*child_ino, retained_dir);
-                if !is_inode_static(*child_ino)
+                if !InodeBlockAllocator::is_static(*child_ino)
                     && !to_retain.contains(&key)
                     && !new_inodes.contains(&key)
                 {
@@ -452,7 +407,7 @@ impl FilesystemStructure {
             let dyn_fn = match self
                 .lookup_inode(inode)
                 .and_then(|e| e.as_dir())
-                .and_then(|dir| dir.dynamic)
+                .and_then(|dir| dir.dynamic())
             {
                 Some((int, dyn_fn)) if int == interest => dyn_fn,
                 _ => {
@@ -470,8 +425,8 @@ impl FilesystemStructure {
 
         self.walk_ancestors(file, |inode| {
             let associated_data = self.lookup_inode(inode).and_then(|e| match e {
-                Entry::File(f) => f.associated_data.as_ref(),
-                Entry::Dir(d) => d.associated_data.as_ref(),
+                Entry::File(f) => f.associated_data(),
+                Entry::Dir(d) => d.associated_data(),
                 _ => None,
             });
 
@@ -610,199 +565,6 @@ impl StructureInner {
     }
 }
 
-impl Entry {
-    fn as_dir(&self) -> Option<&DirEntry> {
-        match self {
-            Entry::Dir(dir) => Some(dir),
-            _ => None,
-        }
-    }
-}
-
-impl FileEntryBuilder {
-    pub fn behaviour(mut self, behaviour: FileBehaviour) -> Self {
-        self.0.behaviour = Some(behaviour);
-        self
-    }
-
-    /// Overrides parent directory
-    pub fn associated_data(mut self, data: EntryAssociatedData) -> Self {
-        self.0.associated_data = Some(data);
-        self
-    }
-
-    pub fn filter(mut self, filter: FileFilterFn) -> Self {
-        self.0.filter = Some(filter);
-        self
-    }
-
-    pub fn finish(self) -> FileEntry {
-        self.0
-    }
-}
-
-impl FileEntry {
-    pub fn build() -> FileEntryBuilder {
-        FileEntryBuilder::default()
-    }
-
-    pub fn behaviour(&self) -> Option<&FileBehaviour> {
-        self.behaviour.as_ref()
-    }
-}
-
-impl LinkEntryBuilder {
-    pub fn new(target: LinkTargetFn) -> Self {
-        Self(LinkEntry {
-            target,
-            filter: None,
-        })
-    }
-
-    pub fn filter(mut self, filter: FileFilterFn) -> Self {
-        self.0.filter = Some(filter);
-        self
-    }
-
-    pub fn finish(self) -> LinkEntry {
-        self.0
-    }
-}
-
-impl LinkEntry {
-    pub fn build(
-        target: impl Fn(&GameState) -> Option<Cow<'static, str>> + Send + 'static,
-    ) -> LinkEntryBuilder {
-        LinkEntryBuilder::new(Box::new(target))
-    }
-
-    pub fn target(&self) -> &LinkTargetFn {
-        &self.target
-    }
-}
-
-impl DirEntry {
-    pub fn build() -> DirEntryBuilder {
-        DirEntryBuilder::default()
-    }
-}
-
-impl DirEntryBuilder {
-    pub fn dynamic(mut self, ty: DynamicStateType, dyn_fn: DynamicDirFn) -> Self {
-        self.0.dynamic = Some((ty, dyn_fn));
-        self
-    }
-
-    pub fn associated_data(mut self, data: EntryAssociatedData) -> Self {
-        self.0.associated_data = Some(data);
-        self
-    }
-
-    pub fn filter(mut self, filter: DirFilterFn) -> Self {
-        self.0.filter = Some(filter);
-        self
-    }
-
-    pub fn finish(self) -> DirEntry {
-        self.0
-    }
-}
-
-impl EntryAssociatedData {
-    fn apply_to_state(&self, state: &mut CommandState) {
-        match self {
-            EntryAssociatedData::EntityId(id) => {
-                if state.target_entity.is_none() {
-                    state.target_entity = Some(TargetEntity::Entity(*id))
-                }
-            }
-            EntryAssociatedData::PlayerId => {
-                if state.target_entity.is_none() {
-                    state.target_entity = Some(TargetEntity::Player)
-                }
-            }
-            EntryAssociatedData::World(dim) => {
-                if state.target_world.is_none() {
-                    state.target_world = Some(*dim)
-                }
-            }
-            EntryAssociatedData::Block(pos) => {
-                if state.target_block.is_none() {
-                    state.target_block = Some(*pos)
-                }
-            }
-        }
-    }
-
-    fn apply_to_interest(&self, interest: &mut GameStateInterest) {
-        match self {
-            EntryAssociatedData::World(dim) if interest.target_world.is_none() => {
-                interest.target_world = Some(*dim)
-            }
-            _ => {}
-        }
-    }
-}
-
-impl From<PhantomChildType> for EntryAssociatedData {
-    fn from(ty: PhantomChildType) -> Self {
-        match ty {
-            PhantomChildType::Block([x, y, z]) => {
-                EntryAssociatedData::Block(BlockPos::new(x, y, z))
-            }
-        }
-    }
-}
-
-impl From<FileEntry> for Entry {
-    fn from(e: FileEntry) -> Self {
-        Self::File(e)
-    }
-}
-
-impl From<DirEntry> for Entry {
-    fn from(e: DirEntry) -> Self {
-        Self::Dir(e)
-    }
-}
-
-impl From<LinkEntry> for Entry {
-    fn from(e: LinkEntry) -> Self {
-        Self::Link(e)
-    }
-}
-
-impl Entry {
-    pub fn filter(&self, state: &GameState) -> EntryFilterResult {
-        match self {
-            Entry::File(f) => {
-                if let Some(filter) = f.filter {
-                    return if (filter)(state) {
-                        EntryFilterResult::IncludeSelf
-                    } else {
-                        EntryFilterResult::Exclude
-                    };
-                }
-            }
-            Entry::Link(l) => {
-                if let Some(filter) = l.filter {
-                    return if (filter)(state) {
-                        EntryFilterResult::IncludeSelf
-                    } else {
-                        EntryFilterResult::Exclude
-                    };
-                }
-            }
-            Entry::Dir(d) => {
-                if let Some(filter) = d.filter {
-                    return (filter)(state);
-                }
-            }
-        };
-        EntryFilterResult::IncludeSelf
-    }
-}
-
 impl<'a> DynamicDirRegistrationer<'a> {
     fn new(parent: u64, structure: &'a mut FilesystemStructure) -> Self {
         Self {
@@ -813,6 +575,8 @@ impl<'a> DynamicDirRegistrationer<'a> {
         }
     }
 
+    /// (vec of (new inode, its name under the parent, the entry, its parent),
+    /// set of (reused inode, its parent))
     pub fn take_entries(
         self,
     ) -> (
@@ -861,167 +625,5 @@ impl<'a> DynamicDirRegistrationer<'a> {
 
     pub fn parent(&self) -> u64 {
         self.parent
-    }
-}
-
-mod entry_impls {
-    use std::fmt::Formatter;
-
-    use super::*;
-
-    macro_rules! cmp_fn_ptrs {
-        ($a:expr, $b:expr) => {
-            match ($a, $b) {
-                (Some(a), Some(b)) => std::ptr::eq(a as *const (), b as *const ()),
-                (None, None) => true,
-                _ => false,
-            }
-        };
-    }
-
-    #[derive(Debug)]
-    #[repr(C)]
-    struct SplitFatPtr {
-        data: *const (),
-        vtable: *const (),
-    }
-
-    impl SplitFatPtr {
-        unsafe fn split<T: ?Sized>(ptr: *const T) -> SplitFatPtr {
-            let ptr_ref: *const *const T = &ptr;
-            let decomp_ref = ptr_ref as *const [usize; 2];
-            std::mem::transmute(*decomp_ref)
-        }
-    }
-
-    impl PartialEq for FileEntry {
-        fn eq(&self, other: &Self) -> bool {
-            self.behaviour == other.behaviour
-                && self.associated_data == other.associated_data
-                && cmp_fn_ptrs!(self.filter, other.filter)
-        }
-    }
-
-    impl PartialEq for DirEntry {
-        fn eq(&self, other: &Self) -> bool {
-            self.associated_data == other.associated_data
-                && cmp_fn_ptrs!(self.filter, other.filter)
-                && match (self.dynamic, other.dynamic) {
-                    (Some((ty_a, fn_a)), Some((ty_b, fn_b))) => {
-                        ty_a == ty_b && std::ptr::eq(fn_a as *const (), fn_b as *const ())
-                    }
-                    (None, None) => true,
-                    _ => false,
-                }
-        }
-    }
-
-    impl PartialEq for LinkEntry {
-        fn eq(&self, other: &Self) -> bool {
-            let (a, b) = unsafe {
-                (
-                    SplitFatPtr::split(self.target.as_ref()),
-                    SplitFatPtr::split(other.target.as_ref()),
-                )
-            };
-            std::ptr::eq(a.vtable, b.vtable) && cmp_fn_ptrs!(self.filter, other.filter)
-        }
-    }
-
-    macro_rules! debug_fn {
-        ($opt_fn:expr) => {
-            $opt_fn.map(|func| func as *const ())
-        };
-    }
-
-    impl Debug for FileEntry {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("File")
-                .field("behaviour", &self.behaviour)
-                .field("associated_data", &self.associated_data)
-                .field("filter", &debug_fn!(self.filter))
-                .finish()
-        }
-    }
-
-    impl Debug for DirEntry {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("Dir")
-                .field(
-                    "dynamic",
-                    &self
-                        .dynamic
-                        .as_ref()
-                        .map(|(ty, func)| (ty, *func as *const ())),
-                )
-                .field("associated_data", &self.associated_data)
-                .field("filter", &debug_fn!(self.filter))
-                .finish()
-        }
-    }
-
-    impl Debug for Entry {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            match self {
-                Entry::File(e) => Debug::fmt(e, f),
-                Entry::Dir(e) => Debug::fmt(e, f),
-                Entry::Link(_) => write!(f, "Link(..)"),
-            }
-        }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        #[test]
-        fn fn_comparison() {
-            fn a(_: i32) -> i32 {
-                2
-            }
-            fn b(_: i32) -> i32 {
-                5
-            }
-
-            type MyFn = fn(i32) -> i32;
-            let a1_ = a as MyFn;
-            let a2_ = a as MyFn;
-            let b_ = b as MyFn;
-
-            assert!(cmp_fn_ptrs!(Some(a1_), Some(a1_)));
-            assert!(cmp_fn_ptrs!(Some(a1_), Some(a2_)));
-            assert!(!cmp_fn_ptrs!(Some(a1_), Some(b_)));
-
-            assert!(!cmp_fn_ptrs!(Some(a1_), Option::<MyFn>::None));
-            assert!(cmp_fn_ptrs!(Option::<MyFn>::None, Option::<MyFn>::None));
-        }
-
-        #[test]
-        fn file_entry_comparison() {
-            let a = FileEntry::build()
-                .behaviour(FileBehaviour::ReadWrite(
-                    CommandType::EntityHealth,
-                    BodyType::Float,
-                ))
-                .finish();
-            let b = FileEntry::build()
-                .behaviour(FileBehaviour::ReadWrite(
-                    CommandType::EntityHealth,
-                    BodyType::Float,
-                ))
-                .finish();
-            assert_eq!(a, b);
-        }
-
-        #[test]
-        fn dir_entry_comparison() {
-            let a = DirEntry::build()
-                .associated_data(EntryAssociatedData::PlayerId)
-                .finish();
-            let b = DirEntry::build()
-                .associated_data(EntryAssociatedData::PlayerId)
-                .finish();
-            assert_eq!(a, b);
-        }
     }
 }
