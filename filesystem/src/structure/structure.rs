@@ -340,6 +340,10 @@ mod tests {
             parse_block_position("1.0 400.0 -64.0"),
             Some([1, 400, -64])
         ));
+        assert!(matches!(
+            parse_block_position("-4.011348385264139 105.89626455878891 56.17007141838458"),
+            Some([-4, 105, 56])
+        ));
         assert!(matches!(parse_block_position("0,0,0"), Some([0, 0, 0])));
         assert!(parse_block_position("oof").is_none());
         assert!(parse_block_position("1,2,3,4").is_none());

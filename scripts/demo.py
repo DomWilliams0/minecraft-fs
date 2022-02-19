@@ -35,7 +35,7 @@ def blocks():
     if player is None:
         return
 
-    pos = player.pos.to_block_pos()
+    pos = player.position.to_block_pos()
     pos.y -= 1
 
     sz = 3

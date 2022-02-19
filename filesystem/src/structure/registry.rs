@@ -2,7 +2,6 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fmt::Debug;
-
 use std::time::{Duration, Instant};
 
 use log::*;
@@ -13,7 +12,7 @@ use ipc::generated::{BlockPos, CommandType, Dimension};
 use ipc::{BodyType, CommandState, TargetEntity};
 
 use crate::state::{GameState, GameStateInterest};
-use crate::structure::inode::InodeBlockAllocator;
+use crate::structure::inode::{is_inode_static, InodeBlockAllocator};
 
 pub struct FilesystemStructure {
     inner: StructureInner,
@@ -327,34 +326,68 @@ impl FilesystemStructure {
             .map(|(ino, _, _, parent)| (*ino, *parent))
             .collect::<HashSet<_>>();
 
-        // register new inodes
         for (new_inode, new_name, new_entry, new_parent) in new_entries.into_iter() {
-            self.inner
-                .register(new_inode, new_entry, Some((new_parent, new_name)));
+            let parent_info = Some((new_parent, new_name));
+            self.inner.register(new_inode, new_entry, parent_info);
         }
 
         let new_state = DynamicState {
-            inodes: new_inodes,
+            inodes: new_inodes.clone(),
             time_collected: Instant::now(),
         };
 
+        let mut old_inodes = HashSet::new();
         if let Some(prev_state) = self
             .inner
             .dynamic_state
             .insert((parent, interest), new_state)
         {
-            let mut old_inodes = prev_state.inodes;
+            let empty = std::mem::replace(&mut old_inodes, prev_state.inodes);
+            debug_assert!(empty.is_empty());
+            std::mem::forget(empty);
+
             old_inodes.retain(|key| !to_retain.contains(key));
+        }
 
-            for (old_ino, _) in old_inodes {
-                self.inner.unregister(old_ino, parent);
+        let retained_dirs = to_retain
+            .iter()
+            .map(|(_, parent)| *parent)
+            .collect::<HashSet<_>>();
 
-                #[cfg(debug_assertions)]
-                self.ensure_unused(old_ino);
+        for retained_dir in retained_dirs {
+            trace!(
+                "looking in retained dir {} to remove stale entries",
+                retained_dir
+            );
+            let children = self
+                .inner
+                .child_registry
+                .get(&retained_dir)
+                .expect("dir was not retained");
+            for (child_ino, child_name) in children {
+                let key = (*child_ino, retained_dir);
+                if !is_inode_static(*child_ino)
+                    && !to_retain.contains(&key)
+                    && !new_inodes.contains(&key)
+                {
+                    trace!(
+                        "removing stale entry {:?} inode {} under {}",
+                        child_name,
+                        child_ino,
+                        retained_dir
+                    );
+
+                    old_inodes.insert((*child_ino, parent));
+                }
             }
         }
 
-        // TODO need to unregister stale child nodes under a directory that reuses its inode
+        for (old_ino, _) in old_inodes {
+            self.inner.unregister(old_ino, parent);
+
+            #[cfg(debug_assertions)]
+            self.ensure_unused(old_ino);
+        }
     }
 
     #[cfg(debug_assertions)]

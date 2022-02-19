@@ -155,7 +155,6 @@ class BlockPos:
 
 class EntityProxy:
     def __init__(self, mc: Minecraft, world: str, id: int) -> EntityProxy:
-        print(f"entity with id {id}")
         self._world = world
         self._id = id
         self._mc = mc
@@ -194,6 +193,10 @@ class EntityProxy:
     def health(self, value: float):
         path = self._path / "health"
         self._mc._write(path, str(value))
+
+    @property
+    def world(self) -> str:
+        return self._world
 
     def teleport(self, target: Position):
         self.position = target
