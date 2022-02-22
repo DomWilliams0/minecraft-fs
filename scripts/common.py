@@ -47,13 +47,13 @@ class Minecraft:
             print(f"error: {e}")
             exit(1)
 
-    def player(self) -> Optional[EntityProxy]:
+    def player(self) -> Optional[PlayerProxy]:
         try:
             entity = (self.mnt / "player" / "entity").resolve()
             world_name = (self.mnt / "player" / "world").readlink().name
 
             entity_id = int(entity.name)
-            return EntityProxy(self, world_name, entity_id)
+            return PlayerProxy(self, world_name, entity_id)
         except Exception:
             return None
 
@@ -171,7 +171,6 @@ class EntityProxy:
 
     @property
     def position(self) -> Position:
-        print(f"get pos for {self.id}")
         path = self._path / "position"
         return Position.from_string(self._mc._read(path))
 
@@ -180,7 +179,6 @@ class EntityProxy:
         """
         Position is treated as if it's in the same world
         """
-        print(f"set pos for {self.id}")
         path = self._path / "position"
         self._mc._write(path, repr(value))
 
@@ -203,6 +201,12 @@ class EntityProxy:
 
     def kill(self):
         self.health = 0
+
+
+class PlayerProxy(EntityProxy):
+    @property
+    def name(self) -> str:
+        return self._mc._read(self._mc.mnt / "player" / "name")
 
 
 class BlockProxy:

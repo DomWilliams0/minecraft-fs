@@ -167,7 +167,7 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
             "README",
             FileEntry::build()
                 .behaviour(FileBehaviour::Static(
-                    "Path format is ./x,y,z\ne.g. 0,64,100\n".into(),
+                    "Path format is ./x,y,z or ./x\\ y\\ z\ne.g. 0,64,100 or \"0.5 22.3 41.5555\"\n".into(),
                 ))
                 .finish(),
         );

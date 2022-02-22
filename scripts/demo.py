@@ -3,21 +3,22 @@ import sys
 from common import Minecraft, IoException, BlockPos
 
 
-def tp_all():
+def demo_tpall():
     player = mc.player()
     if player is None:
         return
 
+    target = player.position
     for e in mc.iter_entities():
         try:
-            e.teleport(player.position)
+            e.teleport(target)
             print(f"teleported {e.id}")
         except IoException as exc:
             print(f"failed to tp {e.id}: {exc}")
             raise exc
 
 
-def kill_all_other_than_player():
+def demo_killall():
     player = mc.player()
     if player is None:
         return
@@ -26,11 +27,12 @@ def kill_all_other_than_player():
         if e.id != player.id:
             try:
                 e.kill()
+                print(f"killed {e.id}")
             except IoException as exc:
                 print(f"failed to kill {e.id}: {exc}")
 
 
-def blocks():
+def demo_blocks():
     player = mc.player()
     if player is None:
         return
@@ -49,12 +51,18 @@ def blocks():
 if __name__ == '__main__':
     mc = Minecraft.from_args()
 
-    what = sys.argv[2]
-    if what == "tp-all":
-        tp_all()
-    elif what == "killall":
-        kill_all_other_than_player(),
-    elif what == "blocks":
-        blocks(),
-    else:
-        print("unknown demo")
+    def list_demos():
+        return [name[len("demo_"):] for name in globals().keys() if name.startswith("demo_")]
+
+    try:
+        what = sys.argv[2]
+    except IndexError:
+        print("missing demo name, which can be one of {}".format(list_demos()))
+        exit(1)
+
+    try:
+        name = "demo_{}".format(what.lower())
+        globals()[name]()
+    except KeyError:
+        print("invalid demo name, must be one of {}".format(list_demos()))
+        exit(1)
