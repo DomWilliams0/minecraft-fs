@@ -1,0 +1,65 @@
+name: Build
+on: [pull_request, push]
+
+jobs:
+  build_plugin:
+    name: Build Minecraft mod
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        java: [17]
+    defaults:
+      run:
+        working-directory: ./plugin
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - name: Setup JDK ${{ matrix.java }}
+        uses: actions/setup-java@v1
+        with:
+          java-version: ${{ matrix.java }}
+
+      - uses: burrunan/gradle-cache-action@v1
+        name: Build mod
+        with:
+          arguments: build
+          build-root-directory: ./plugin
+
+      - name: Capture build artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: Mod
+          path: plugin/build/libs/*jar
+
+  build_fuse:
+    name: Build FUSE filesystem
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Install FUSE deps
+        run: sudo apt install -y fuse3 libfuse3-dev
+
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v1
+        with:
+          cache-on-failure: true
+
+      - name: Run tests
+        run: cargo test --workspace
+
+      - name: Build
+        run: cargo build --bin mcfuse --release
+
+      - name: Capture build artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: FUSE
+          path: target/release/mcfuse
