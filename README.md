@@ -68,7 +68,7 @@ Your `mnt` directory should contain the following:
 ```bash
 $ cd mnt
 $ ls
-player  worlds
+player  version  worlds
 
 $ ls -l player
 drwxr-xr-x   - dom 21 Feb 20:27 control

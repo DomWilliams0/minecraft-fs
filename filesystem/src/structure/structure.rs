@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use ipc::generated::{CommandType, Dimension, EntityDetails};
 use ipc::BodyType;
 use ipc::BodyType::*;
@@ -17,7 +19,16 @@ pub fn create_structure() -> FilesystemStructure {
     player_dir(&mut builder);
     worlds_dir(&mut builder);
 
-    let root = builder.root();
+    builder.add_entry(
+        builder.root(),
+        "version",
+        FileEntry::build()
+            .behaviour(FileBehaviour::Static(Cow::Borrowed(env!(
+                "CARGO_PKG_VERSION"
+            ))))
+            .finish(),
+    );
+
     builder.finish()
 }
 
