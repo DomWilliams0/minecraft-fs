@@ -1,5 +1,6 @@
 # minecraft-fs
 
+[![Build](https://github.com/DomWilliams0/minecraft-fs/actions/workflows/build.yml/badge.svg)](https://github.com/DomWilliams0/minecraft-fs/actions/workflows/build.yml)
 [![Lines](https://tokei.rs/b1/github/DomWilliams0/minecraft-fs)](https://github.com/XAMPPRocky/tokei)
 
 A FUSE filesystem for querying and controlling Minecraft, as a universal mod platform (but mainly
@@ -29,9 +30,6 @@ For fun, to learn about FUSE, but most importantly - why not?
 <img src=".gifs/teleport.gif" />
 
 ## Teleporting others to the player
-<img src=".gifs/teleport-other.gif" />
-
-### Using find and xargs
 <img src=".gifs/teleport-all.gif" />
 
 ## Setting health
@@ -143,3 +141,32 @@ Congratulations, you can now manipulate the game through reading and writing to 
 TODO: download mod jar and mcfuse binary from github actions, install fabric mod, run game, start
 mcfuse and specify mnt directory
 
+# TODOs
+
+* More endpoints
+    * [X] player gamemode
+    * [X] entity hunger
+    * [ ] better player movement
+    * [ ] entity looking direction (yaw,pitch,roll)
+    * [X] entity target pos
+    * [ ] symlink to entity vehicle
+* Inventory management
+    * [ ] individual slots
+    * [ ] symlink to current slot, armour, other hand
+    * [ ] give/spawn items
+* More block control
+*   * [ ] orientation
+    * [ ] nbt tags
+* [ ] Entity spawning
+* More entity filters than `by-id`
+    * [ ] by-type
+    * [ ] by-proximity-to a position and radius
+* Server settings
+    * [ ] game rules
+    * [ ] pvp
+    * [ ] difficulty
+* Event file for reacting to events
+    * [ ] `tail`able file of events such as player chat
+* Multiplayer support
+    * [ ] install as a server mod, control the server world
+    * [ ] install as a client mod and join an unmodded server, at least control the player

@@ -3,7 +3,6 @@
 package MCFS
 
 @Suppress("unused")
-@ExperimentalUnsignedTypes
 class Error private constructor() {
     companion object {
         const val Unknown: Int = 0
@@ -12,7 +11,8 @@ class Error private constructor() {
         const val MalformedRequest: Int = 3
         const val NoSuchEntity: Int = 4
         const val NoSuchBlock: Int = 5
-        val names : Array<String> = arrayOf("Unknown", "UnknownCommand", "NoGame", "MalformedRequest", "NoSuchEntity", "NoSuchBlock")
+        const val BadInput: Int = 6
+        val names : Array<String> = arrayOf("Unknown", "UnknownCommand", "NoGame", "MalformedRequest", "NoSuchEntity", "NoSuchBlock", "BadInput")
         fun name(e: Int) : String = names[e]
     }
 }

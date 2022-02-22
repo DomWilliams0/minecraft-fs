@@ -3,20 +3,24 @@
 package MCFS
 
 @Suppress("unused")
-@ExperimentalUnsignedTypes
 class CommandType private constructor() {
     companion object {
         const val PlayerName: Int = 0
-        const val EntityType: Int = 1
-        const val EntityPosition: Int = 2
-        const val EntityHealth: Int = 3
-        const val WorldTime: Int = 4
-        const val BlockType: Int = 5
-        const val BlockColor: Int = 6
-        const val ControlSay: Int = 7
-        const val ControlJump: Int = 8
-        const val ControlMove: Int = 9
-        val names : Array<String> = arrayOf("PlayerName", "EntityType", "EntityPosition", "EntityHealth", "WorldTime", "BlockType", "BlockColor", "ControlSay", "ControlJump", "ControlMove")
+        const val PlayerGamemode: Int = 1
+        const val PlayerHunger: Int = 2
+        const val PlayerSaturation: Int = 3
+        const val PlayerExhaustion: Int = 4
+        const val EntityType: Int = 5
+        const val EntityPosition: Int = 6
+        const val EntityHealth: Int = 7
+        const val EntityTarget: Int = 8
+        const val WorldTime: Int = 9
+        const val BlockType: Int = 10
+        const val ControlSay: Int = 11
+        const val ControlJump: Int = 12
+        const val ControlMove: Int = 13
+        const val ServerCommand: Int = 14
+        val names : Array<String> = arrayOf("PlayerName", "PlayerGamemode", "PlayerHunger", "PlayerSaturation", "PlayerExhaustion", "EntityType", "EntityPosition", "EntityHealth", "EntityTarget", "WorldTime", "BlockType", "ControlSay", "ControlJump", "ControlMove", "ServerCommand")
         fun name(e: Int) : String = names[e]
     }
 }

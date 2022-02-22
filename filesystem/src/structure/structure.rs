@@ -29,6 +29,15 @@ pub fn create_structure() -> FilesystemStructure {
             .finish(),
     );
 
+    builder.add_entry(
+        builder.root(),
+        "command",
+        FileEntry::build()
+            .behaviour(FileBehaviour::WriteOnly(CommandType::ServerCommand, String))
+            .filter(|state| state.is_in_game())
+            .finish(),
+    );
+
     builder.finish()
 }
 
@@ -53,6 +62,46 @@ fn player_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
         "name",
         FileEntry::build()
             .behaviour(FileBehaviour::ReadOnly(CommandType::PlayerName, String))
+            .finish(),
+    );
+
+    builder.add_entry(
+        dir,
+        "gamemode",
+        FileEntry::build()
+            .behaviour(FileBehaviour::ReadWrite(
+                CommandType::PlayerGamemode,
+                String,
+            ))
+            .finish(),
+    );
+
+    builder.add_entry(
+        dir,
+        "hunger",
+        FileEntry::build()
+            .behaviour(FileBehaviour::ReadWrite(CommandType::PlayerHunger, Integer))
+            .finish(),
+    );
+
+    builder.add_entry(
+        dir,
+        "saturation",
+        FileEntry::build()
+            .behaviour(FileBehaviour::ReadWrite(
+                CommandType::PlayerSaturation,
+                Float,
+            ))
+            .finish(),
+    );
+    builder.add_entry(
+        dir,
+        "exhaustion",
+        FileEntry::build()
+            .behaviour(FileBehaviour::ReadWrite(
+                CommandType::PlayerExhaustion,
+                Float,
+            ))
             .finish(),
     );
 
@@ -217,19 +266,6 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
                         .finish(),
                 );
 
-                // TODO useful block info
-                if block.has_color {
-                    reg.add_root_entry(
-                        "color",
-                        FileEntry::build()
-                            .behaviour(FileBehaviour::ReadOnly(
-                                CommandType::BlockColor,
-                                BodyType::String,
-                            ))
-                            .finish(),
-                    );
-                }
-
                 let neighbours_dir = reg.add_root_entry("adjacent", DirEntry::default());
                 type PosMut<'a> = &'a mut (i32, i32, i32);
                 macro_rules! adjacent {
@@ -312,6 +348,15 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, ty: Entity
         "position",
         FileEntry::build()
             .behaviour(ReadWrite(CommandType::EntityPosition, Position))
+            .filter(|state| state.is_in_game())
+            .finish(),
+    );
+
+    reg.add_entry(
+        entity_dir,
+        "target",
+        FileEntry::build()
+            .behaviour(WriteOnly(CommandType::EntityTarget, Position))
             .filter(|state| state.is_in_game())
             .finish(),
     );

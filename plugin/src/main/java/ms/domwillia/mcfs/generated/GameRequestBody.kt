@@ -3,7 +3,6 @@
 package MCFS
 
 @Suppress("unused")
-@ExperimentalUnsignedTypes
 class GameRequestBody private constructor() {
     companion object {
         const val NONE: UByte = 0u

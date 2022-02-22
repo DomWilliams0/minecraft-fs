@@ -3,18 +3,25 @@ namespace MCFS;
 
 enum CommandType:int32 {
 	PlayerName,
+	PlayerGamemode,
+	PlayerHunger,
+	PlayerSaturation,
+	PlayerExhaustion,
+
 	EntityType,
 	EntityPosition,
 	EntityHealth,
+	EntityTarget,
 
 	WorldTime,
 
 	BlockType,
-	BlockColor,
 
 	ControlSay,
 	ControlJump,
 	ControlMove,
+
+	ServerCommand,
 }
 
 

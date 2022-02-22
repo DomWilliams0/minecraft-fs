@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class IpcChannel : Runnable {
     private val channel: ServerSocketChannel
-    val keepRunning = AtomicBoolean(true)
+    private val keepRunning = AtomicBoolean(true)
 
     @Throws(IOException::class)
     fun close() {

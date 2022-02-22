@@ -118,23 +118,28 @@ pub mod mcfs {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_COMMAND_TYPE: i32 = 9;
+    pub const ENUM_MAX_COMMAND_TYPE: i32 = 14;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 10] = [
+    pub const ENUM_VALUES_COMMAND_TYPE: [CommandType; 15] = [
         CommandType::PlayerName,
+        CommandType::PlayerGamemode,
+        CommandType::PlayerHunger,
+        CommandType::PlayerSaturation,
+        CommandType::PlayerExhaustion,
         CommandType::EntityType,
         CommandType::EntityPosition,
         CommandType::EntityHealth,
+        CommandType::EntityTarget,
         CommandType::WorldTime,
         CommandType::BlockType,
-        CommandType::BlockColor,
         CommandType::ControlSay,
         CommandType::ControlJump,
         CommandType::ControlMove,
+        CommandType::ServerCommand,
     ];
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -143,43 +148,58 @@ pub mod mcfs {
     #[allow(non_upper_case_globals)]
     impl CommandType {
         pub const PlayerName: Self = Self(0);
-        pub const EntityType: Self = Self(1);
-        pub const EntityPosition: Self = Self(2);
-        pub const EntityHealth: Self = Self(3);
-        pub const WorldTime: Self = Self(4);
-        pub const BlockType: Self = Self(5);
-        pub const BlockColor: Self = Self(6);
-        pub const ControlSay: Self = Self(7);
-        pub const ControlJump: Self = Self(8);
-        pub const ControlMove: Self = Self(9);
+        pub const PlayerGamemode: Self = Self(1);
+        pub const PlayerHunger: Self = Self(2);
+        pub const PlayerSaturation: Self = Self(3);
+        pub const PlayerExhaustion: Self = Self(4);
+        pub const EntityType: Self = Self(5);
+        pub const EntityPosition: Self = Self(6);
+        pub const EntityHealth: Self = Self(7);
+        pub const EntityTarget: Self = Self(8);
+        pub const WorldTime: Self = Self(9);
+        pub const BlockType: Self = Self(10);
+        pub const ControlSay: Self = Self(11);
+        pub const ControlJump: Self = Self(12);
+        pub const ControlMove: Self = Self(13);
+        pub const ServerCommand: Self = Self(14);
 
         pub const ENUM_MIN: i32 = 0;
-        pub const ENUM_MAX: i32 = 9;
+        pub const ENUM_MAX: i32 = 14;
         pub const ENUM_VALUES: &'static [Self] = &[
             Self::PlayerName,
+            Self::PlayerGamemode,
+            Self::PlayerHunger,
+            Self::PlayerSaturation,
+            Self::PlayerExhaustion,
             Self::EntityType,
             Self::EntityPosition,
             Self::EntityHealth,
+            Self::EntityTarget,
             Self::WorldTime,
             Self::BlockType,
-            Self::BlockColor,
             Self::ControlSay,
             Self::ControlJump,
             Self::ControlMove,
+            Self::ServerCommand,
         ];
         /// Returns the variant's name or "" if unknown.
         pub fn variant_name(self) -> Option<&'static str> {
             match self {
                 Self::PlayerName => Some("PlayerName"),
+                Self::PlayerGamemode => Some("PlayerGamemode"),
+                Self::PlayerHunger => Some("PlayerHunger"),
+                Self::PlayerSaturation => Some("PlayerSaturation"),
+                Self::PlayerExhaustion => Some("PlayerExhaustion"),
                 Self::EntityType => Some("EntityType"),
                 Self::EntityPosition => Some("EntityPosition"),
                 Self::EntityHealth => Some("EntityHealth"),
+                Self::EntityTarget => Some("EntityTarget"),
                 Self::WorldTime => Some("WorldTime"),
                 Self::BlockType => Some("BlockType"),
-                Self::BlockColor => Some("BlockColor"),
                 Self::ControlSay => Some("ControlSay"),
                 Self::ControlJump => Some("ControlJump"),
                 Self::ControlMove => Some("ControlMove"),
+                Self::ServerCommand => Some("ServerCommand"),
                 _ => None,
             }
         }
@@ -346,19 +366,20 @@ pub mod mcfs {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_ERROR: i32 = 5;
+    pub const ENUM_MAX_ERROR: i32 = 6;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_ERROR: [Error; 6] = [
+    pub const ENUM_VALUES_ERROR: [Error; 7] = [
         Error::Unknown,
         Error::UnknownCommand,
         Error::NoGame,
         Error::MalformedRequest,
         Error::NoSuchEntity,
         Error::NoSuchBlock,
+        Error::BadInput,
     ];
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -372,9 +393,10 @@ pub mod mcfs {
         pub const MalformedRequest: Self = Self(3);
         pub const NoSuchEntity: Self = Self(4);
         pub const NoSuchBlock: Self = Self(5);
+        pub const BadInput: Self = Self(6);
 
         pub const ENUM_MIN: i32 = 0;
-        pub const ENUM_MAX: i32 = 5;
+        pub const ENUM_MAX: i32 = 6;
         pub const ENUM_VALUES: &'static [Self] = &[
             Self::Unknown,
             Self::UnknownCommand,
@@ -382,6 +404,7 @@ pub mod mcfs {
             Self::MalformedRequest,
             Self::NoSuchEntity,
             Self::NoSuchBlock,
+            Self::BadInput,
         ];
         /// Returns the variant's name or "" if unknown.
         pub fn variant_name(self) -> Option<&'static str> {
@@ -392,6 +415,7 @@ pub mod mcfs {
                 Self::MalformedRequest => Some("MalformedRequest"),
                 Self::NoSuchEntity => Some("NoSuchEntity"),
                 Self::NoSuchBlock => Some("NoSuchBlock"),
+                Self::BadInput => Some("BadInput"),
                 _ => None,
             }
         }
@@ -616,6 +640,7 @@ pub mod mcfs {
             v.in_buffer::<Self>(pos)
         }
     }
+
     impl<'a> Vec3 {
         #[allow(clippy::too_many_arguments)]
         pub fn new(x: f64, y: f64, z: f64) -> Self {
@@ -766,6 +791,7 @@ pub mod mcfs {
             v.in_buffer::<Self>(pos)
         }
     }
+
     impl<'a> BlockPos {
         #[allow(clippy::too_many_arguments)]
         pub fn new(x: i32, y: i32, z: i32) -> Self {
@@ -921,6 +947,7 @@ pub mod mcfs {
             v.in_buffer::<Self>(pos)
         }
     }
+
     impl<'a> EntityDetails {
         #[allow(clippy::too_many_arguments)]
         pub fn new(id: i32, living: bool) -> Self {
@@ -1094,6 +1121,7 @@ pub mod mcfs {
             }
         }
     }
+
     pub struct WriteBodyBuilder<'a: 'b, 'b> {
         fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
@@ -1274,6 +1302,7 @@ pub mod mcfs {
             }
         }
     }
+
     pub struct CommandBuilder<'a: 'b, 'b> {
         fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
@@ -1429,6 +1458,7 @@ pub mod mcfs {
             }
         }
     }
+
     pub struct StateRequestBuilder<'a: 'b, 'b> {
         fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
@@ -1596,6 +1626,7 @@ pub mod mcfs {
             }
         }
     }
+
     pub struct GameRequestBuilder<'a: 'b, 'b> {
         fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
@@ -1778,6 +1809,7 @@ pub mod mcfs {
             }
         }
     }
+
     pub struct ResponseBuilder<'a: 'b, 'b> {
         fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
@@ -1938,6 +1970,7 @@ pub mod mcfs {
             }
         }
     }
+
     pub struct StateResponseBuilder<'a: 'b, 'b> {
         fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
@@ -2077,6 +2110,7 @@ pub mod mcfs {
             }
         }
     }
+
     pub struct BlockDetailsBuilder<'a: 'b, 'b> {
         fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
@@ -2239,6 +2273,7 @@ pub mod mcfs {
             }
         }
     }
+
     pub struct GameResponseBuilder<'a: 'b, 'b> {
         fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,

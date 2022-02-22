@@ -6,6 +6,7 @@ import ms.domwillia.mcfs.MinecraftFsMod
 import net.minecraft.block.Block
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.network.ClientPlayerEntity
+import net.minecraft.command.argument.EntityAnchorArgumentType
 import net.minecraft.entity.Entity
 import net.minecraft.entity.LivingEntity
 import net.minecraft.entity.damage.DamageSource
@@ -18,6 +19,7 @@ import net.minecraft.util.math.Box
 import net.minecraft.util.math.Vec3d
 import net.minecraft.util.registry.Registry
 import net.minecraft.util.registry.SimpleRegistry
+import net.minecraft.world.GameMode
 import net.minecraft.world.World
 import java.nio.ByteBuffer
 
@@ -28,7 +30,7 @@ class BadBlockException(val block: String) : Exception()
 class UnknownEntityException(val id: Int) : Exception()
 class UnsupportedOperationException : Exception()
 class InvalidTypeForWriteException : Exception()
-
+class InvalidInputForEnum(val enumType: String) : Exception()
 
 @ExperimentalUnsignedTypes
 class Executor(private val responseBuilder: FlatBufferBuilder) {
@@ -51,6 +53,9 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                 } catch (e: BadBlockException) {
                     MinecraftFsMod.LOGGER.error("Bad block: ${e.block}")
                     mkError(Error.NoSuchBlock)
+                } catch (e: InvalidInputForEnum) {
+                    MinecraftFsMod.LOGGER.error("Invalid value for enum '${e.enumType}")
+                    mkError(Error.BadInput)
                 } catch (e: Exception) {
                     MinecraftFsMod.LOGGER.catching(e)
                     mkError(Error.Unknown)
@@ -93,6 +98,45 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                 command.ro()
                 mkString(MinecraftClient.getInstance().session.username)
             }
+            CommandType.PlayerGamemode -> {
+                val value = command.rwString()?.lowercase();
+                val server = theServer
+                val player = server.thePlayer
+                if (value == null) {
+                    val mgr = server.getPlayerInteractionManager(player)
+                    mkString(mgr.gameMode.getName())
+                } else {
+                    val mode = GameMode.byName(value, null) ?: throw InvalidInputForEnum("gamemode")
+                    player.changeGameMode(mode); Unit
+                }
+            }
+            CommandType.PlayerHunger -> {
+                val value = command.rwInt();
+                val hunger = theServer.thePlayer.hungerManager;
+                if (value == null) {
+                    mkInt(hunger.foodLevel)
+                } else {
+                    hunger.foodLevel = value
+                }
+            }
+            CommandType.PlayerSaturation -> {
+                val value = command.rwFloat();
+                val hunger = theServer.thePlayer.hungerManager;
+                if (value == null) {
+                    mkFloat(hunger.saturationLevel)
+                } else {
+                    hunger.saturationLevel = value
+                }
+            }
+            CommandType.PlayerExhaustion -> {
+                val value = command.rwFloat();
+                val hunger = theServer.thePlayer.hungerManager;
+                if (value == null) {
+                    mkFloat(hunger.exhaustion)
+                } else {
+                    hunger.exhaustion = value
+                }
+            }
             CommandType.EntityType -> {
                 command.ro()
                 mkString(getTargetEntity(command).type.toString())
@@ -118,6 +162,11 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                 } else {
                     entity.teleport(value.x, value.y, value.z)
                 }
+            }
+            CommandType.EntityTarget -> {
+                val value = command.woVec()
+                val entity = getTargetEntity(command)
+                entity.lookAt(EntityAnchorArgumentType.EntityAnchor.EYES, value)
             }
             CommandType.WorldTime -> {
                 val value = command.rwInt()
@@ -170,7 +219,13 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
 
             CommandType.ControlMove -> {
                 val vec = command.woVec()
-                theClientPlayer.travel(vec)
+                theClientPlayer.travel(vec) // TODO this is crap
+            }
+
+            CommandType.ServerCommand -> {
+                val cmd = command.woString()
+                val server = theServer
+                server.commandManager.execute(server.commandSource, cmd); Unit
             }
 
             else -> {

@@ -296,6 +296,7 @@ fn ipc_error_code(err: &IpcError) -> i32 {
         | IpcError::Deserialization(_) => libc::EIO,
         IpcError::UnexpectedGameResponse(_)
         | IpcError::UnexpectedResponse(_)
+        | IpcError::BadInput
         | IpcError::BadData(_) => libc::EINVAL,
         _ => libc::EINVAL,
     }

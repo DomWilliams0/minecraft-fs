@@ -8,6 +8,7 @@ enum Error:int32 {
 	MalformedRequest,
 	NoSuchEntity,
 	NoSuchBlock,
+	BadInput,
 }
 
 table Response {

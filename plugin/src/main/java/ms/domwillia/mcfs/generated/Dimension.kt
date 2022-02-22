@@ -3,7 +3,6 @@
 package MCFS
 
 @Suppress("unused")
-@ExperimentalUnsignedTypes
 class Dimension private constructor() {
     companion object {
         const val Overworld: UByte = 1u

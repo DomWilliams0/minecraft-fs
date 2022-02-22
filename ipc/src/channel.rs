@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use flatbuffers::{root, FlatBufferBuilder, InvalidFlatbuffer};
+use log::warn;
 use thiserror::Error;
 
 use crate::command::{Body, BodyType, CommandState, TargetEntity};
@@ -61,6 +62,9 @@ pub enum IpcError {
 
     #[error("Write data cannot be serialized into {0:?}")]
     BadData(BodyType),
+
+    #[error("Invalid input")]
+    BadInput,
 }
 
 impl IpcChannel {
@@ -216,6 +220,7 @@ impl IpcChannel {
         if let Some(err) = response.error() {
             Err(match err {
                 Error::NoGame => IpcError::NoCurrentGame,
+                Error::BadInput => IpcError::BadInput,
                 _ => IpcError::ClientError(err.variant_name().unwrap()),
             })
         } else {
@@ -229,15 +234,21 @@ impl IpcChannel {
                     response.vec(),
                 ) {
                     (None, None, None, None, None) => return Ok(None),
-                    (Some(Float), Some(val), None, None, None) => Body::Float(val),
-                    (Some(Integer), None, Some(val), None, None) => Body::Integer(val),
+                    (Some(Float), val, None, None, None) => Body::Float(val.unwrap_or(0.0)),
+                    (Some(Integer), None, val, None, None) => Body::Integer(val.unwrap_or(0)),
                     (Some(String), None, None, Some(val), None) => Body::String(val.into()),
                     (Some(Position), None, None, None, Some(val)) => Body::Vec {
                         x: val.x(),
                         y: val.y(),
                         z: val.z(),
                     },
-                    _ => return Err(IpcError::UnexpectedResponse(expected_response_type)),
+                    (expected, f, i, s, v) => {
+                        warn!(
+                            "expected {:?} but instead got this: float={:?},int={:?},str={:?},vec={:?}",
+                            expected, f, i, s, v
+                        );
+                        return Err(IpcError::UnexpectedResponse(expected_response_type));
+                    }
                 },
             ));
         }
