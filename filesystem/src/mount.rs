@@ -1,12 +1,12 @@
 use std::error::Error;
-use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
-use crate::fuse::MinecraftFs;
-use fuser::BackgroundSession;
-use ipc::IpcChannel;
+use fuser::{BackgroundSession, MountOption, Session};
 use parking_lot::{Condvar, Mutex};
+
+use ipc::IpcChannel;
+
+use crate::fuse::MinecraftFs;
 
 struct Mounter(BackgroundSession);
 pub struct MountStatus;
@@ -14,20 +14,19 @@ pub struct MountStatus;
 static MOUNTER: Mutex<Option<Mounter>> = parking_lot::const_mutex(None);
 static CVAR: Condvar = Condvar::new();
 
-pub fn mount(ipc: IpcChannel, path: &Path, opts: &[&str]) -> Result<MountStatus, Box<dyn Error>> {
+pub fn mount(ipc: IpcChannel, path: &Path) -> Result<MountStatus, Box<dyn Error>> {
     ctrlc::set_handler(|| {
         let mut guard = MOUNTER.lock();
         *guard = None;
         CVAR.notify_all();
     })?;
 
-    log::info!("mounting at {}", path.display());
-    // TODO this is ridiculous but temporary
-    let opts = opts
-        .iter()
-        .map(|s| OsStr::from_bytes(s.as_bytes()))
-        .collect::<Vec<_>>();
-    let mnt = fuser::spawn_mount(MinecraftFs::new(ipc), path, &opts)?;
+    log::debug!("Mounting at {}", path.display());
+    let opts = [
+        MountOption::FSName("minecraft-fs".to_owned()),
+        MountOption::RW,
+    ];
+    let mnt = Session::new(MinecraftFs::new(ipc), path, &opts).and_then(|se| se.spawn())?;
     {
         let mut guard = MOUNTER.lock();
         *guard = Some(Mounter(mnt));

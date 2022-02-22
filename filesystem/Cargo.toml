@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 ipc = { path = "../ipc" }
-fuser = "0.9"
+fuser = "0.10"
 libc = "0.2"
 ctrlc = "3.2"
 parking_lot = "0.11"

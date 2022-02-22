@@ -26,9 +26,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     // connect to game
     let ipc = IpcChannel::open_existing()?;
-
-    let opts = ["-o", "fsname=minecraft,rw"];
-    let mnted = filesystem::mount(ipc, mnt_point.as_ref(), &opts)?;
+    let mnted = filesystem::mount(ipc, mnt_point.as_ref())?;
 
     println!("mounted! ctrl c to exit");
     mnted.wait_for_unmount();
