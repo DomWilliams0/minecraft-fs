@@ -103,14 +103,14 @@ impl IpcChannel {
         body_type: BodyType,
         data: &[u8],
         state: CommandState,
-    ) -> Result<usize, IpcError> {
+    ) -> Result<(), IpcError> {
         log::trace!("write data {:?}", data);
         let write = body_type
             .create_from_data(data)
             .ok_or(IpcError::BadData(body_type))?;
 
         self.send_raw_command(cmd, None, Some(write), state)?;
-        Ok(data.len())
+        Ok(())
     }
 
     pub fn send_state_request(

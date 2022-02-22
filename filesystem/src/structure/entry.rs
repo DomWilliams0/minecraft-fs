@@ -269,6 +269,7 @@ impl Entry {
 
 mod entry_impls {
     use crate::structure::entry::{DirEntry, Entry, FileEntry, LinkEntry};
+    use crate::structure::fatptr::SplitFatPtr;
     use std::fmt::{Debug, Formatter};
 
     macro_rules! cmp_fn_ptrs {
@@ -279,21 +280,6 @@ mod entry_impls {
                 _ => false,
             }
         };
-    }
-
-    #[derive(Debug)]
-    #[repr(C)]
-    struct SplitFatPtr {
-        data: *const (),
-        vtable: *const (),
-    }
-
-    impl SplitFatPtr {
-        unsafe fn split<T: ?Sized>(ptr: *const T) -> SplitFatPtr {
-            let ptr_ref: *const *const T = &ptr;
-            let decomp_ref = ptr_ref as *const [usize; 2];
-            std::mem::transmute(*decomp_ref)
-        }
     }
 
     impl PartialEq for FileEntry {
@@ -326,7 +312,7 @@ mod entry_impls {
                     SplitFatPtr::split(other.target.as_ref()),
                 )
             };
-            std::ptr::eq(a.vtable, b.vtable) && cmp_fn_ptrs!(self.filter, other.filter)
+            a == b && cmp_fn_ptrs!(self.filter, other.filter)
         }
     }
 

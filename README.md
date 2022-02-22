@@ -157,7 +157,7 @@ mcfuse and specify mnt directory
 * More block control
 *   * [ ] orientation
     * [ ] nbt tags
-* [ ] Entity spawning
+* [X] Entity spawning
 * More entity filters than `by-id`
     * [ ] by-type
     * [ ] by-proximity-to a position and radius
@@ -165,8 +165,12 @@ mcfuse and specify mnt directory
     * [ ] game rules
     * [ ] pvp
     * [ ] difficulty
+    * [ ] weather
 * Event file for reacting to events
     * [ ] `tail`able file of events such as player chat
+* Client specific things
+    * [ ] pause/unpause game
+    * [ ] load into world, stop server
 * Multiplayer support
     * [ ] install as a server mod, control the server world
     * [ ] install as a client mod and join an unmodded server, at least control the player

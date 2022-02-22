@@ -1,5 +1,7 @@
+use std::borrow::Cow;
 use std::ffi::OsStr;
 use std::fmt::Write;
+
 use std::time::{Duration, SystemTime};
 
 use fuser::{
@@ -8,7 +10,8 @@ use fuser::{
 };
 use log::*;
 
-use ipc::{IpcChannel, IpcError};
+use ipc::generated::CommandType;
+use ipc::{BodyType, IpcChannel, IpcError};
 
 use crate::state::CachedGameState;
 use crate::structure::{
@@ -146,7 +149,6 @@ impl fuser::Filesystem for MinecraftFs {
         let file = match self.structure.lookup_inode(ino) {
             Some(Entry::File(f)) => f,
             _ => {
-                trace!("NO FILE");
                 return reply.error(libc::ENOENT);
             }
         };
@@ -155,7 +157,7 @@ impl fuser::Filesystem for MinecraftFs {
             Some(FileBehaviour::ReadOnly(cmd, resp) | FileBehaviour::ReadWrite(cmd, resp)) => {
                 (cmd, resp)
             }
-            Some(FileBehaviour::Static(msg)) => {
+            Some(FileBehaviour::Static(msg) | FileBehaviour::CommandProxy { readme: msg, .. }) => {
                 let msg = msg.as_bytes();
                 let start = offset as usize;
                 let end = (start + size as usize).min(msg.len());
@@ -209,16 +211,35 @@ impl fuser::Filesystem for MinecraftFs {
             _ => return reply.error(libc::ENOENT),
         };
 
-        let (cmd, body_type) = match file.behaviour() {
+        let (cmd, body_type, data_to_send) = match file.behaviour() {
             Some(FileBehaviour::WriteOnly(cmd, body) | FileBehaviour::ReadWrite(cmd, body)) => {
-                (cmd, body)
+                (*cmd, *body, Cow::Borrowed(data))
+            }
+            Some(FileBehaviour::CommandProxy {
+                produce_cmd_fn: write,
+                ..
+            }) => {
+                // must be utf8
+                let input_str = match std::str::from_utf8(data) {
+                    Ok(s) => s,
+                    Err(_) => return reply.error(libc::EINVAL),
+                };
+
+                let server_cmd = match write(input_str.trim_end()) {
+                    Some(s) => Cow::Owned(s.into_boxed_str().into_boxed_bytes().into_vec()),
+                    None => return reply.error(libc::EINVAL),
+                };
+                (CommandType::ServerCommand, BodyType::String, server_cmd)
             }
             _ => return reply.error(libc::EOPNOTSUPP),
         };
 
         let state = self.structure.command_state_for_file(ino);
-        match self.ipc.send_write_command(*cmd, *body_type, data, state) {
-            Ok(resp) => reply.written(resp as u32),
+        match self
+            .ipc
+            .send_write_command(cmd, body_type, &data_to_send, state)
+        {
+            Ok(_) => reply.written(data.len() as u32),
             Err(err) => {
                 error!("write failed: {}", err);
                 reply.error(ipc_error_code(&err));

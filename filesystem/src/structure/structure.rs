@@ -52,7 +52,7 @@ fn player_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
         "player",
         DirEntry::build()
             .associated_data(EntryAssociatedData::PlayerId)
-            .dynamic(DynamicStateType::PlayerId, |state, reg| {
+            .dynamic(DynamicStateType::PlayerId, |_, reg| {
                 mk_entity_dir(reg, reg.parent(), EntityType::SpecificallyPlayer);
             })
             .finish(),
@@ -210,7 +210,7 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
                 .finish(),
         );
 
-        entities_dir(builder, world);
+        entities_dir(builder, world, dimension);
 
         builder.add_entry(
             world,
@@ -221,7 +221,6 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
         );
 
         let blocks_dir = builder.add_entry(world, "blocks", DirEntry::default());
-
         builder.add_entry(
             blocks_dir,
             "README",
@@ -297,7 +296,7 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
     dir
 }
 
-fn entities_dir(builder: &mut FilesystemStructureBuilder, root: u64) -> u64 {
+fn entities_dir(builder: &mut FilesystemStructureBuilder, root: u64, dimension: Dimension) -> u64 {
     let dir = builder.add_entry(
         root,
         "entities",
@@ -331,6 +330,35 @@ fn entities_dir(builder: &mut FilesystemStructureBuilder, root: u64) -> u64 {
             })
             .finish(),
     );
+
+    builder.add_entry(
+        dir,
+        "spawn",
+        FileEntry::build()
+            .behaviour(FileBehaviour::CommandProxy {
+                readme: r#"Spawn an entity at a position with optional NBT tags.
+Accepts same position as /summon command (e.g. ~20 100 ~5).
+Format: "[entity type]\n[position]\n<nbt>"
+Examples:
+   pig\n100 20 50\n
+   chicken\n20.0 64.5 100.0\n
+   creeper\n0,64,0\n{powered:1b,CustomName:'{"text":"Powered Creeper"}'}"#
+                    .into(),
+                produce_cmd_fn: Box::new(move |input| {
+                    let (entity_ty, pos, nbt) = {
+                        let mut lines = input.lines();
+                        let entity_ty = lines.next()?; // required
+                        let pos = lines.next()?; // required, let the server parse it
+                        let nbt = lines.next().unwrap_or_default(); // optional
+                        (entity_ty, pos, nbt)
+                    };
+
+                    Some(format!("summon {entity_ty} {pos} {nbt}"))
+                }),
+            })
+            .finish(),
+    );
+
     dir
 }
 

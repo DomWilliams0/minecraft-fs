@@ -16,6 +16,7 @@ use crate::state::{GameState, GameStateInterest};
 use crate::structure::entry::{
     DirEntry, DynamicDirFn, Entry, EntryAssociatedData, PhantomDynamicInterestFn,
 };
+use crate::structure::fatptr::SplitFatPtr;
 use crate::structure::inode::InodeBlockAllocator;
 
 pub struct FilesystemStructure {
@@ -80,7 +81,8 @@ pub enum EntryFilterResult {
     Exclude,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(derivative::Derivative)]
+#[derivative(PartialEq, Debug)]
 pub enum FileBehaviour {
     ReadOnly(CommandType, BodyType),
     WriteOnly(CommandType, BodyType),
@@ -89,7 +91,15 @@ pub enum FileBehaviour {
     Static(Cow<'static, str>),
     /// Not readable or writable
     ForShow,
+    CommandProxy {
+        readme: Cow<'static, str>,
+        #[derivative(Debug = "ignore")]
+        #[derivative(PartialEq(compare_with = "cmp_cmd_proxy_fn"))]
+        produce_cmd_fn: CommandProxyFn,
+    },
 }
+
+type CommandProxyFn = Box<dyn Fn(&str) -> Option<String> + Send>;
 
 pub struct DynamicInterest {
     /// (inode, interest)
@@ -693,4 +703,14 @@ impl<'a> DynamicDirRegistrationer<'a> {
     pub fn parent(&self) -> u64 {
         self.parent
     }
+}
+
+fn cmp_cmd_proxy_fn(a: &CommandProxyFn, b: &CommandProxyFn) -> bool {
+    let (a, b) = unsafe {
+        (
+            SplitFatPtr::split(a as *const CommandProxyFn),
+            SplitFatPtr::split(b as *const CommandProxyFn),
+        )
+    };
+    a == b
 }

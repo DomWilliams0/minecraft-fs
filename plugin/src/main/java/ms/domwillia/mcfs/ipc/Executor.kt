@@ -30,7 +30,7 @@ class BadBlockException(val block: String) : Exception()
 class UnknownEntityException(val id: Int) : Exception()
 class UnsupportedOperationException : Exception()
 class InvalidTypeForWriteException : Exception()
-class InvalidInputForEnum(val enumType: String) : Exception()
+class InvalidInputException(val wat: String) : Exception()
 
 @ExperimentalUnsignedTypes
 class Executor(private val responseBuilder: FlatBufferBuilder) {
@@ -53,8 +53,8 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                 } catch (e: BadBlockException) {
                     MinecraftFsMod.LOGGER.error("Bad block: ${e.block}")
                     mkError(Error.NoSuchBlock)
-                } catch (e: InvalidInputForEnum) {
-                    MinecraftFsMod.LOGGER.error("Invalid value for enum '${e.enumType}")
+                } catch (e: InvalidInputException) {
+                    MinecraftFsMod.LOGGER.error("Invalid value for '${e.wat}'")
                     mkError(Error.BadInput)
                 } catch (e: Exception) {
                     MinecraftFsMod.LOGGER.catching(e)
@@ -106,7 +106,7 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                     val mgr = server.getPlayerInteractionManager(player)
                     mkString(mgr.gameMode.getName())
                 } else {
-                    val mode = GameMode.byName(value, null) ?: throw InvalidInputForEnum("gamemode")
+                    val mode = GameMode.byName(value, null) ?: throw InvalidInputException("gamemode")
                     player.changeGameMode(mode); Unit
                 }
             }
@@ -224,8 +224,21 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
 
             CommandType.ServerCommand -> {
                 val cmd = command.woString()
+                val world = getTargetWorld(command)
                 val server = theServer
-                server.commandManager.execute(server.commandSource, cmd); Unit
+                val player = server.thePlayer
+                val src = server.commandSource
+                    .withPosition(player.pos)
+                    .withEntity(player)
+                    .withWorld(world)
+                    .withSilent()
+                val ret = server.commandManager.execute(src, cmd)
+                if (ret == 0) {
+                    MinecraftFsMod.LOGGER.warn("Bad command '$cmd'")
+                    throw InvalidInputException("server command")
+                } else {
+                    Unit
+                }
             }
 
             else -> {
