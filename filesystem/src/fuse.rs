@@ -289,7 +289,7 @@ impl fuser::Filesystem for MinecraftFs {
 fn ipc_error_code(err: &IpcError) -> i32 {
     match err {
         IpcError::NoCurrentGame | IpcError::ClientError(_) => libc::EOPNOTSUPP,
-        IpcError::NotFound => libc::ENOENT,
+        IpcError::NoGame => libc::ENOENT,
         IpcError::Connecting(_)
         | IpcError::Sending(_)
         | IpcError::Receiving(_)

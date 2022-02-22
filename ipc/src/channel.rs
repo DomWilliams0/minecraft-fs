@@ -26,9 +26,9 @@ pub struct IpcChannel {
 #[derive(Debug, Error)]
 pub enum IpcError {
     #[error("Socket not found, game is probably not running")]
-    NotFound,
+    NoGame,
 
-    #[error("IO error connecting to socket: {0}")]
+    #[error("IO error connecting to socket, is the game running? ({0})")]
     Connecting(#[source] std::io::Error),
 
     #[cfg(feature = "client")]
@@ -282,7 +282,7 @@ impl IpcChannel {
                     .map_err(IpcError::SettingTimeout)?;
                 Ok(f)
             }
-            Err(err) if err.kind() == ErrorKind::NotFound => Err(IpcError::NotFound),
+            Err(err) if err.kind() == ErrorKind::NotFound => Err(IpcError::NoGame),
             Err(err) => Err(IpcError::Connecting(err)),
         }
     }
