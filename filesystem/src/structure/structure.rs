@@ -210,7 +210,7 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
                 .finish(),
         );
 
-        entities_dir(builder, world, dimension);
+        entities_dir(builder, world);
 
         builder.add_entry(
             world,
@@ -296,7 +296,7 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
     dir
 }
 
-fn entities_dir(builder: &mut FilesystemStructureBuilder, root: u64, dimension: Dimension) -> u64 {
+fn entities_dir(builder: &mut FilesystemStructureBuilder, root: u64) -> u64 {
     let dir = builder.add_entry(
         root,
         "entities",
@@ -344,7 +344,7 @@ Examples:
    chicken\n20.0 64.5 100.0\n
    creeper\n0,64,0\n{powered:1b,CustomName:'{"text":"Powered Creeper"}'}"#
                     .into(),
-                produce_cmd_fn: Box::new(move |input| {
+                produce_cmd_fn: (|input| {
                     let (entity_ty, pos, nbt) = {
                         let mut lines = input.lines();
                         let entity_ty = lines.next()?; // required

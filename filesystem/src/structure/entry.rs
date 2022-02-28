@@ -1,9 +1,12 @@
+use std::any::{Any, TypeId};
+use std::borrow::Cow;
+
+use ipc::generated::{BlockPos, Dimension};
+use ipc::{CommandState, TargetEntity};
+
 use crate::state::{GameState, GameStateInterest};
 use crate::structure::registry::{DynamicDirRegistrationer, DynamicStateType, PhantomChildType};
 use crate::structure::{EntryFilterResult, FileBehaviour};
-use ipc::generated::{BlockPos, Dimension};
-use ipc::{CommandState, TargetEntity};
-use std::borrow::Cow;
 
 pub type DynamicDirFn = fn(&GameState, &mut DynamicDirRegistrationer);
 pub type PhantomDynamicInterestFn = fn(PhantomChildType) -> DynamicStateType;
@@ -34,6 +37,7 @@ pub struct FileEntry {
 
 pub struct LinkEntry {
     target: LinkTargetFn,
+    target_typeid: TypeId,
     filter: Option<FileFilterFn>,
 }
 
@@ -99,9 +103,10 @@ impl FileEntry {
 }
 
 impl LinkEntryBuilder {
-    pub fn new(target: LinkTargetFn) -> Self {
+    fn new(target: LinkTargetFn, target_typeid: TypeId) -> Self {
         Self(LinkEntry {
             target,
+            target_typeid,
             filter: None,
         })
     }
@@ -120,7 +125,8 @@ impl LinkEntry {
     pub fn build(
         target: impl Fn(&GameState) -> Option<Cow<'static, str>> + Send + 'static,
     ) -> LinkEntryBuilder {
-        LinkEntryBuilder::new(Box::new(target))
+        let typeid = target.type_id();
+        LinkEntryBuilder::new(Box::new(target), typeid)
     }
 
     pub fn target(&self) -> &LinkTargetFn {
@@ -268,9 +274,9 @@ impl Entry {
 }
 
 mod entry_impls {
-    use crate::structure::entry::{DirEntry, Entry, FileEntry, LinkEntry};
-    use crate::structure::fatptr::SplitFatPtr;
     use std::fmt::{Debug, Formatter};
+
+    use crate::structure::entry::{DirEntry, Entry, FileEntry, LinkEntry};
 
     macro_rules! cmp_fn_ptrs {
         ($a:expr, $b:expr) => {
@@ -306,13 +312,7 @@ mod entry_impls {
 
     impl PartialEq for LinkEntry {
         fn eq(&self, other: &Self) -> bool {
-            let (a, b) = unsafe {
-                (
-                    SplitFatPtr::split(self.target.as_ref()),
-                    SplitFatPtr::split(other.target.as_ref()),
-                )
-            };
-            a == b && cmp_fn_ptrs!(self.filter, other.filter)
+            self.target_typeid == other.target_typeid && cmp_fn_ptrs!(self.filter, other.filter)
         }
     }
 
@@ -348,6 +348,15 @@ mod entry_impls {
         }
     }
 
+    impl Debug for LinkEntry {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("Link")
+                .field("target", &(Box::as_ref(&self.target) as *const _))
+                .field("filter", &debug_fn!(self.filter))
+                .finish()
+        }
+    }
+
     impl Debug for Entry {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             match self {
@@ -360,11 +369,14 @@ mod entry_impls {
 
     #[cfg(test)]
     mod tests {
-        use super::*;
-        use crate::structure::entry::EntryAssociatedData;
-        use crate::structure::FileBehaviour;
         use ipc::generated::CommandType;
         use ipc::BodyType;
+
+        use crate::structure::entry::{EntryAssociatedData, FileFilterFn};
+        use crate::structure::registry::DynamicStateType;
+        use crate::structure::FileBehaviour;
+
+        use super::*;
 
         #[test]
         fn fn_comparison() {
@@ -407,13 +419,52 @@ mod entry_impls {
 
         #[test]
         fn dir_entry_comparison() {
-            let a = DirEntry::build()
-                .associated_data(EntryAssociatedData::PlayerId)
-                .finish();
-            let b = DirEntry::build()
-                .associated_data(EntryAssociatedData::PlayerId)
-                .finish();
+            let mk_dir = || {
+                DirEntry::build()
+                    .associated_data(EntryAssociatedData::PlayerId)
+                    .dynamic(DynamicStateType::PlayerId, |_, _| eprintln!("wowee"))
+                    .finish()
+            };
+
+            let a = mk_dir();
+            let b = mk_dir();
+
             assert_eq!(a, b);
+        }
+
+        #[test]
+        fn link_entry_comparison() {
+            let captured = 50i32;
+
+            let mk_link1 = || LinkEntry::build(move |_| Some(captured.to_string().into())).finish();
+            let mk_link2 = || LinkEntry::build(|_| None).finish();
+
+            let mk_link_with_filter = |filter: Option<FileFilterFn>| {
+                let mut l = LinkEntry::build(|_| Some("teehee".to_string().into()));
+                if let Some(filter) = filter {
+                    l = l.filter(filter);
+                }
+                l.finish()
+            };
+
+            let a = mk_link1();
+            let b = mk_link1();
+            let c = mk_link2();
+            let d = mk_link2();
+
+            assert_eq!(a, b);
+            assert_eq!(b, a);
+            assert_eq!(c, d);
+
+            assert_ne!(a, c);
+            assert_ne!(b, c);
+
+            assert_ne!(
+                mk_link_with_filter(None),
+                mk_link_with_filter(Some(|_| true)),
+            );
+
+            assert_eq!(mk_link_with_filter(None), mk_link_with_filter(None),);
         }
     }
 }

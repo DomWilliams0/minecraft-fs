@@ -16,7 +16,6 @@ use crate::state::{GameState, GameStateInterest};
 use crate::structure::entry::{
     DirEntry, DynamicDirFn, Entry, EntryAssociatedData, PhantomDynamicInterestFn,
 };
-use crate::structure::fatptr::SplitFatPtr;
 use crate::structure::inode::InodeBlockAllocator;
 
 pub struct FilesystemStructure {
@@ -91,6 +90,7 @@ pub enum FileBehaviour {
     Static(Cow<'static, str>),
     /// Not readable or writable
     ForShow,
+    /// Delegates to a server command
     CommandProxy {
         readme: Cow<'static, str>,
         #[derivative(Debug = "ignore")]
@@ -99,7 +99,8 @@ pub enum FileBehaviour {
     },
 }
 
-type CommandProxyFn = Box<dyn Fn(&str) -> Option<String> + Send>;
+/// Takes user input from written file, outputs server command to execute
+type CommandProxyFn = fn(&str) -> Option<String>;
 
 pub struct DynamicInterest {
     /// (inode, interest)
@@ -683,7 +684,6 @@ impl<'a> DynamicDirRegistrationer<'a> {
     fn add_entry_raw(&mut self, parent: u64, name: Cow<'static, str>, entry: Entry) -> u64 {
         trace!("adding raw dynamic entry under {}: {:?}", parent, name);
 
-        // TODO put unwrap into try_get_inode again
         match self.structure.lookup_child(parent, name.as_ref().as_ref()) {
             Some((prev_inode, prev_entry)) if &entry == prev_entry => {
                 // identical entry, reuse inode
@@ -706,11 +706,5 @@ impl<'a> DynamicDirRegistrationer<'a> {
 }
 
 fn cmp_cmd_proxy_fn(a: &CommandProxyFn, b: &CommandProxyFn) -> bool {
-    let (a, b) = unsafe {
-        (
-            SplitFatPtr::split(a as *const CommandProxyFn),
-            SplitFatPtr::split(b as *const CommandProxyFn),
-        )
-    };
-    a == b
+    std::ptr::eq(*a as *const (), *b as *const ())
 }
