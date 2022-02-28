@@ -103,8 +103,7 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                 val server = theServer
                 val player = server.thePlayer
                 if (value == null) {
-                    val mgr = server.getPlayerInteractionManager(player)
-                    mkString(mgr.gameMode.getName())
+                    mkString(player.interactionManager.gameMode.getName())
                 } else {
                     val mode = GameMode.byName(value, null) ?: throw InvalidInputException("gamemode")
                     player.changeGameMode(mode); Unit
