@@ -27,7 +27,7 @@ def demo_killall():
         if e.id != player.id:
             try:
                 e.kill()
-                print(f"killed {e.id}")
+                print(f"killed {e.id} ({e.entity_type})")
             except IoException as exc:
                 print(f"failed to kill {e.id}: {exc}")
 

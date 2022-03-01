@@ -272,10 +272,9 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
 
         val block = if (world != null && req.targetBlock != null) {
             val tgt = req.targetBlock!!
-            val state = world.getBlockState(BlockPos(tgt.x, tgt.y, tgt.z))
+            // val state = world.getBlockState(BlockPos(tgt.x, tgt.y, tgt.z))
 
             BlockDetails.startBlockDetails(responseBuilder)
-            BlockDetails.addHasColor(responseBuilder, state.material != null)
             BlockDetails.addPos(responseBuilder, MCFS.BlockPos.createBlockPos(responseBuilder, tgt.x, tgt.y, tgt.z))
             BlockDetails.endBlockDetails(responseBuilder)
         } else {

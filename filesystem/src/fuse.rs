@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::ffi::OsStr;
 use std::fmt::Write;
-
 use std::time::{Duration, SystemTime};
 
 use fuser::{
@@ -24,9 +23,13 @@ pub struct MinecraftFs {
     ipc: IpcChannel,
     state: CachedGameState,
     structure: FilesystemStructure,
+    response_buffer: String,
 }
 
 const TTL: Duration = Duration::from_secs(1);
+
+/// Arbitrary size returned for all files
+const MAX_FILE_SIZE: u64 = 256;
 
 impl fuser::Filesystem for MinecraftFs {
     fn lookup(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEntry) {
@@ -177,11 +180,14 @@ impl fuser::Filesystem for MinecraftFs {
         };
 
         // TODO respect offset and size
-        // TODO reuse allocation
-        let mut response_data = String::new();
-        match write!(&mut response_data, "{}", resp) {
+        self.response_buffer.clear();
+        match write!(&mut self.response_buffer, "{}", resp) {
             Ok(_) => {
-                reply.data(response_data.as_bytes());
+                debug_assert!(
+                    self.response_buffer.len() <= MAX_FILE_SIZE as usize,
+                    "max file size is too low"
+                );
+                reply.data(self.response_buffer.as_bytes());
             }
             Err(_) => reply.error(libc::ENOMEM),
         }
@@ -341,14 +347,14 @@ impl MinecraftFs {
             ipc,
             state: CachedGameState::default(),
             structure,
+            response_buffer: String::new(),
         }
     }
 
     fn mk_attr(&self, ino: u64, entry: &Entry) -> FileAttr {
         let time = SystemTime::now();
-        // TODO set file size properly
         let (kind, size) = match entry {
-            Entry::File(_) => (FileType::RegularFile, 256),
+            Entry::File(_) => (FileType::RegularFile, MAX_FILE_SIZE),
             Entry::Dir(_) => (FileType::Directory, 0),
             Entry::Link(_) => (FileType::Symlink, 0),
         };

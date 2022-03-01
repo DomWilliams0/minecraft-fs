@@ -5,7 +5,7 @@ use ipc::generated::{CommandType, Dimension, EntityDetails};
 use ipc::BodyType;
 use ipc::BodyType::*;
 
-use crate::structure::entry::{DirEntry, EntryAssociatedData, FileEntry, FileFilterFn, LinkEntry};
+use crate::structure::entry::{DirEntry, EntryAssociatedData, FileEntry, LinkEntry};
 use crate::structure::registry::EntryFilterResult::{Exclude, IncludeAllChildren};
 use crate::structure::registry::{
     DynamicDirRegistrationer, DynamicStateType, FilesystemStructureBuilder, PhantomChildType,
@@ -170,7 +170,7 @@ fn player_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
         FileEntry::build()
             .behaviour(FileBehaviour::WriteOnly(
                 CommandType::ControlJump,
-                BodyType::String, // TODO no input expected?
+                BodyType::String,
             ))
             .finish(),
     );

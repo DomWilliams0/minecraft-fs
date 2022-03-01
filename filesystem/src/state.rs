@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 use log::{debug, trace};
 
@@ -18,13 +18,11 @@ pub struct GameState {
 
 #[derive(Debug)]
 pub struct BlockDetails {
-    pub has_color: bool,
     pub pos: BlockPos,
 }
 
 pub struct CachedGameState {
-    // TODO use Instant instead
-    last_query: SystemTime,
+    last_query: Instant,
     last_interest: GameStateInterest,
     state: GameState,
 }
@@ -40,7 +38,7 @@ pub struct GameStateInterest {
 impl Default for CachedGameState {
     fn default() -> Self {
         Self {
-            last_query: SystemTime::now(),
+            last_query: Instant::now(),
             state: GameState::default(),
             last_interest: GameStateInterest::default(),
         }
@@ -69,11 +67,8 @@ impl CachedGameState {
         ipc: &mut IpcChannel,
         interest: GameStateInterest,
     ) -> Result<&GameState, IpcError> {
-        let now = SystemTime::now();
-        let stale = now
-            .duration_since(self.last_query)
-            .map(|d| d > CACHE_TIME)
-            .unwrap_or(true);
+        let now = Instant::now();
+        let stale = now.duration_since(self.last_query) > CACHE_TIME;
 
         log::debug!("getting state for interest: {:?}", interest);
         let additive = self.last_interest.is_additive(&interest);
@@ -98,10 +93,7 @@ impl CachedGameState {
                     .entities()
                     .map(|v| v.iter().copied().collect())
                     .unwrap_or_default(),
-                block: response.block().map(|b| BlockDetails {
-                    has_color: b.has_color(),
-                    pos: *b.pos(),
-                }),
+                block: response.block().map(|b| BlockDetails { pos: *b.pos() }),
             };
             trace!("new game state: {:?}", self.state);
             self.last_query = now;

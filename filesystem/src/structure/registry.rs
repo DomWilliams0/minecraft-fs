@@ -6,7 +6,7 @@ use std::panic::AssertUnwindSafe;
 use std::time::{Duration, Instant};
 
 use log::*;
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use strum::{EnumIter, IntoEnumIterator};
 
 use ipc::generated::{BlockPos, CommandType};
@@ -596,7 +596,7 @@ impl StructureInner {
 
     fn unregister(&mut self, inode: u64, root_parent: u64) {
         // TODO might not need to recurse
-        let mut frontier = vec![inode];
+        let mut frontier: SmallVec<[_; 2]> = smallvec![inode];
         trace!("start unregistering from {}", inode);
         while let Some(next) = frontier.pop() {
             trace!("removing inode {}", next);

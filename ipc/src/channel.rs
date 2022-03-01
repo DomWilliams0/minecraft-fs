@@ -22,6 +22,7 @@ pub struct IpcChannel {
     sock: UnixStream,
     retries: u8,
     recv_buffer: Vec<u8>,
+    ser_buffer: FlatBufferBuilder<'static>,
 }
 
 #[derive(Debug, Error)]
@@ -84,6 +85,7 @@ impl IpcChannel {
             sock,
             retries: RETRIES,
             recv_buffer: Vec::with_capacity(8192),
+            ser_buffer: FlatBufferBuilder::with_capacity(4096),
         })
     }
 
@@ -117,20 +119,18 @@ impl IpcChannel {
         &mut self,
         req: &StateRequestArgs,
     ) -> Result<StateResponse, IpcError> {
-        // TODO reuse buffer allocation
-        let mut buf = FlatBufferBuilder::with_capacity(1024);
+        self.ser_buffer.reset();
 
-        let req = StateRequest::create(&mut buf, req);
+        let req = StateRequest::create(&mut self.ser_buffer, req);
         let req = GameRequest::create(
-            &mut buf,
+            &mut self.ser_buffer,
             &GameRequestArgs {
                 body_type: GameRequestBody::StateRequest,
                 body: Some(req.as_union_value()),
             },
         );
-        buf.finish(req, None);
-
-        self.send_raw_request(buf.finished_data())?;
+        self.ser_buffer.finish(req, None);
+        self.send_raw_request()?;
 
         let response = self
             .recv_raw_response()
@@ -150,8 +150,7 @@ impl IpcChannel {
     ) -> Result<Option<Body>, IpcError> {
         use crate::generated::Command;
 
-        // TODO reuse buffer allocation
-        let mut buf = FlatBufferBuilder::with_capacity(1024);
+        self.ser_buffer.reset();
         let cmd = {
             let write_body = write.map(|body| {
                 let mut float = None;
@@ -162,12 +161,12 @@ impl IpcChannel {
                 match body {
                     Body::Integer(val) => int = Some(val),
                     Body::Float(val) => float = Some(val),
-                    Body::String(val) => string = Some(buf.create_string(&val)),
+                    Body::String(val) => string = Some(self.ser_buffer.create_string(&val)),
                     Body::Vec { x, y, z } => pos = Some(Vec3::new(x, y, z)),
                     Body::Block { x, y, z } => block = Some(BlockPos::new(x, y, z)),
                 }
                 WriteBody::create(
-                    &mut buf,
+                    &mut self.ser_buffer,
                     &WriteBodyArgs {
                         float,
                         int,
@@ -185,7 +184,7 @@ impl IpcChannel {
             };
 
             Command::create(
-                &mut buf,
+                &mut self.ser_buffer,
                 &CommandArgs {
                     cmd,
                     target_entity,
@@ -198,15 +197,14 @@ impl IpcChannel {
         };
 
         let req = GameRequest::create(
-            &mut buf,
+            &mut self.ser_buffer,
             &GameRequestArgs {
                 body_type: GameRequestBody::Command,
                 body: Some(cmd.as_union_value()),
             },
         );
-        buf.finish(req, None);
-
-        self.send_raw_request(buf.finished_data())?;
+        self.ser_buffer.finish(req, None);
+        self.send_raw_request()?;
 
         let response = self
             .recv_raw_response()
@@ -254,7 +252,13 @@ impl IpcChannel {
         }
     }
 
-    fn send_raw_request(&mut self, data: &[u8]) -> Result<(), IpcError> {
+    fn send_raw_request(&mut self) -> Result<(), IpcError> {
+        let data = {
+            let self_data = self.ser_buffer.finished_data();
+            // safety: only the socket is touched through mutable self
+            unsafe { &*(self_data as *const [u8]) }
+        };
+
         let len = data.len() as u32;
         log::trace!("sending {} bytes on socket", len);
         #[cfg(feature = "log_socket")]

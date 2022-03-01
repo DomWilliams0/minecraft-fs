@@ -73,6 +73,7 @@ impl FileEntryBuilder {
     }
 
     /// Overrides parent directory
+    #[allow(dead_code)]
     pub fn associated_data(mut self, data: EntryAssociatedData) -> Self {
         self.0.associated_data = Some(data);
         self

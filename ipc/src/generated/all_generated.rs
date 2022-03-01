@@ -2050,7 +2050,6 @@ pub mod mcfs {
 
     impl<'a> BlockDetails<'a> {
         pub const VT_POS: flatbuffers::VOffsetT = 4;
-        pub const VT_HAS_COLOR: flatbuffers::VOffsetT = 6;
 
         #[inline]
         pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -2065,7 +2064,6 @@ pub mod mcfs {
             if let Some(x) = args.pos {
                 builder.add_pos(x);
             }
-            builder.add_has_color(args.has_color);
             builder.finish()
         }
 
@@ -2073,12 +2071,6 @@ pub mod mcfs {
         pub fn pos(&self) -> &'a BlockPos {
             self._tab
                 .get::<BlockPos>(BlockDetails::VT_POS, None)
-                .unwrap()
-        }
-        #[inline]
-        pub fn has_color(&self) -> bool {
-            self._tab
-                .get::<bool>(BlockDetails::VT_HAS_COLOR, Some(false))
                 .unwrap()
         }
     }
@@ -2092,21 +2084,18 @@ pub mod mcfs {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
                 .visit_field::<BlockPos>("pos", Self::VT_POS, true)?
-                .visit_field::<bool>("has_color", Self::VT_HAS_COLOR, false)?
                 .finish();
             Ok(())
         }
     }
     pub struct BlockDetailsArgs<'a> {
         pub pos: Option<&'a BlockPos>,
-        pub has_color: bool,
     }
     impl<'a> Default for BlockDetailsArgs<'a> {
         #[inline]
         fn default() -> Self {
             BlockDetailsArgs {
                 pos: None, // required field
-                has_color: false,
             }
         }
     }
@@ -2120,11 +2109,6 @@ pub mod mcfs {
         pub fn add_pos(&mut self, pos: &BlockPos) {
             self.fbb_
                 .push_slot_always::<&BlockPos>(BlockDetails::VT_POS, pos);
-        }
-        #[inline]
-        pub fn add_has_color(&mut self, has_color: bool) {
-            self.fbb_
-                .push_slot::<bool>(BlockDetails::VT_HAS_COLOR, has_color, false);
         }
         #[inline]
         pub fn new(
@@ -2148,7 +2132,6 @@ pub mod mcfs {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let mut ds = f.debug_struct("BlockDetails");
             ds.field("pos", &self.pos());
-            ds.field("has_color", &self.has_color());
             ds.finish()
         }
     }

@@ -113,13 +113,7 @@ fn handle_client(mut client: ConnectedIpcClient) -> Result<(), Box<dyn StdError>
                 target_block: requested_block,
             } => {
                 let block = requested_block.map(|block| {
-                    BlockDetails::create(
-                        &mut buf,
-                        &BlockDetailsArgs {
-                            has_color: true,
-                            pos: Some(&block),
-                        },
-                    )
+                    BlockDetails::create(&mut buf, &BlockDetailsArgs { pos: Some(&block) })
                 });
 
                 let mut rand = thread_rng();

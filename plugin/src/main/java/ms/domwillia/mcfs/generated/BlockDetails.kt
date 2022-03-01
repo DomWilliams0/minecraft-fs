@@ -25,11 +25,6 @@ class BlockDetails : Table() {
             null
         }
     }
-    val hasColor : Boolean
-        get() {
-            val o = __offset(6)
-            return if(o != 0) 0.toByte() != bb.get(o + bb_pos) else false
-        }
     companion object {
         fun validateVersion() = Constants.FLATBUFFERS_2_0_0()
         fun getRootAsBlockDetails(_bb: ByteBuffer): BlockDetails = getRootAsBlockDetails(_bb, BlockDetails())
@@ -37,9 +32,8 @@ class BlockDetails : Table() {
             _bb.order(ByteOrder.LITTLE_ENDIAN)
             return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb))
         }
-        fun startBlockDetails(builder: FlatBufferBuilder) = builder.startTable(2)
+        fun startBlockDetails(builder: FlatBufferBuilder) = builder.startTable(1)
         fun addPos(builder: FlatBufferBuilder, pos: Int) = builder.addStruct(0, pos, 0)
-        fun addHasColor(builder: FlatBufferBuilder, hasColor: Boolean) = builder.addBoolean(1, hasColor, false)
         fun endBlockDetails(builder: FlatBufferBuilder) : Int {
             val o = builder.endTable()
                 builder.required(o, 4)
