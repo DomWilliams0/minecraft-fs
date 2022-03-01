@@ -460,6 +460,7 @@ impl FilesystemStructure {
                 phantom_dir,
                 DirEntry::build()
                     .associated_data(phantom.dir_associated_data)
+                    .filter(|_| EntryFilterResult::Exclude) // hide phantom dirs
                     .finish()
                     .into(),
                 Some((phantom.parent, phantom.child_name)),
