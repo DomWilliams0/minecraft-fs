@@ -1,5 +1,8 @@
 [workspace]
 
 members = [
-    "mcfuse", "filesystem", "ipc", "test-client",
+    "minecraft-fs", # main binary
+    "filesystem",   # fuse filesystem
+    "ipc",          # IPC comms shared between fs and test client
+    "test-client",  # dummy minecraft client for testing fs
 ]
