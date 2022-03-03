@@ -56,7 +56,7 @@ jobs:
         run: cargo test --workspace
 
       - name: Build
-        run: cargo build --bin mcfuse --release
+        run: cargo build --bin minecraft-fs --release
 
       - name: Capture build artifact
         uses: actions/upload-artifact@v2
