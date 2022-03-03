@@ -2,7 +2,6 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fmt::Debug;
-use std::panic::AssertUnwindSafe;
 use std::time::{Duration, Instant};
 
 use log::*;
@@ -396,9 +395,11 @@ impl FilesystemStructure {
 
     #[cfg(debug_assertions)]
     fn ensure_valid_state(&self) {
+        #![allow(unused_assignments)]
         let mut current_ino = None;
         let mut current_parent = None;
 
+        use std::panic::AssertUnwindSafe;
         let res = std::panic::catch_unwind(AssertUnwindSafe(|| {
             for (ino, _) in self.inner.registry.iter() {
                 current_ino = Some(*ino);
