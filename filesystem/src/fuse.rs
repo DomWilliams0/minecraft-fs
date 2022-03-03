@@ -352,7 +352,14 @@ impl MinecraftFs {
     fn mk_attr(&self, ino: u64, entry: &Entry) -> FileAttr {
         let time = SystemTime::now();
         let (kind, size) = match entry {
-            Entry::File(_) => (FileType::RegularFile, MAX_FILE_SIZE),
+            Entry::File(f) => (
+                FileType::RegularFile,
+                if f.behaviour().is_readable() {
+                    MAX_FILE_SIZE
+                } else {
+                    0
+                },
+            ),
             Entry::Dir(_) => (FileType::Directory, 0),
             Entry::Link(_) => (FileType::Symlink, 0),
         };

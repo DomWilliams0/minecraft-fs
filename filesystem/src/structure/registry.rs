@@ -706,6 +706,12 @@ impl<'a> DynamicDirRegistrationer<'a> {
     }
 }
 
+impl FileBehaviour {
+    pub fn is_readable(&self) -> bool {
+        !matches!(self, Self::ForShow | Self::WriteOnly(_, _))
+    }
+}
+
 fn cmp_cmd_proxy_fn(a: &CommandProxyFn, b: &CommandProxyFn) -> bool {
     std::ptr::eq(*a as *const (), *b as *const ())
 }
