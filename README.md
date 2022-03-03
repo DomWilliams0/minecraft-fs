@@ -2,7 +2,7 @@
 
 [![Build](https://github.com/DomWilliams0/minecraft-fs/actions/workflows/build.yml/badge.svg)](https://github.com/DomWilliams0/minecraft-fs/actions/workflows/build.yml)
 [![Lines](https://tokei.rs/b1/github/DomWilliams0/minecraft-fs)](https://github.com/XAMPPRocky/tokei)
-[![Version](https://img.shields.io/badge/minecraft%20version-1.18.2-blue)]
+![Version](https://img.shields.io/badge/minecraft%20version-1.18.2-blue)
 
 A FUSE filesystem for querying and controlling Minecraft, as a universal mod platform (but mainly
 for fun).
@@ -56,7 +56,7 @@ player.kill()
 
 # Installation
 
-* Download [latest release](https://github.com/DomWilliams0/minecraft-fs), or build it yourself
+* Download [latest release](https://github.com/DomWilliams0/minecraft-fs/releases), or build it yourself
     * Build FUSE filesystem with `cargo build --bin minecraft-fs --release`
     * Build Minecraft mod with `cd plugin; ./gradlew build`, which will build the jar file to
         `build/libs`
