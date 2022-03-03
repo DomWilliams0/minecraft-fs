@@ -196,11 +196,19 @@ class EntityProxy:
     def world(self) -> str:
         return self._world
 
+    @property
+    def living(self):
+        path = self._path / "living"
+        return self._mc._exists(path)
+
     def teleport(self, target: Position):
         self.position = target
 
     def kill(self):
-        self.health = 0
+        if self.living:
+            self.health = 0
+        else:
+            raise NotImplementedError("can't kill non living entities yet")
 
 
 class PlayerProxy(EntityProxy):

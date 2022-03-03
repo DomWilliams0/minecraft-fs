@@ -356,13 +356,7 @@ Examples:
 }
 
 fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, ty: EntityType) {
-    reg.add_entry(
-        entity_dir,
-        "health",
-        FileEntry::build(ReadWrite(CommandType::EntityHealth, Float))
-            .filter(filter_in_game)
-            .finish(),
-    );
+
     reg.add_entry(
         entity_dir,
         "position",
@@ -378,6 +372,21 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, ty: Entity
             .filter(filter_in_game)
             .finish(),
     );
+
+    let add_health = match ty {
+        EntityType::SpecificallyPlayer => true,
+        EntityType::Other(details) => details.living()
+    };
+
+    if add_health {
+        reg.add_entry(
+            entity_dir,
+            "health",
+            FileEntry::build(ReadWrite(CommandType::EntityHealth, Float))
+                .filter(filter_in_game)
+                .finish(),
+        );
+    }
 
     if let EntityType::Other(details) = ty {
         reg.add_entry(

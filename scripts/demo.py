@@ -28,7 +28,7 @@ def demo_killall():
             try:
                 e.kill()
                 print(f"killed {e.id} ({e.entity_type})")
-            except IoException as exc:
+            except Exception as exc:
                 print(f"failed to kill {e.id}: {exc}")
 
 

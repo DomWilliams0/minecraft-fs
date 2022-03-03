@@ -61,15 +61,19 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                     mkError(Error.Unknown)
                 }
 
+                fun emptyResponse(): Int {
+                    Response.startResponse(responseBuilder)
+                    return Response.endResponse(responseBuilder)
+                }
+
                 val respBody = when (maybeRespBody) {
                     is Int -> maybeRespBody
                     null, Unit -> {
-                        Response.startResponse(responseBuilder)
-                        Response.endResponse(responseBuilder)
+                        emptyResponse()
                     }
                     else -> {
                         MinecraftFsMod.LOGGER.error("Bad response returned from executor ($maybeRespBody)")
-                        mkError(Error.Unknown)
+                        emptyResponse()
                     }
                 }
 
@@ -147,7 +151,7 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
                     mkFloat(entity.health)
                 } else {
                     if (value < entity.health) {
-                        entity.damage(DamageSource.OUT_OF_WORLD, entity.health - value)
+                        entity.damage(DamageSource.OUT_OF_WORLD, entity.health - value); Unit
                     } else {
                         entity.health = value
                     }
