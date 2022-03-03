@@ -223,14 +223,18 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
 
             CommandType.ServerCommand -> {
                 val cmd = command.woString()
-                val world = getTargetWorld(command)
+                val world = getTargetWorldOpt(command)
                 val server = theServer
                 val player = server.thePlayer
-                val src = server.commandSource
+                var src = server.commandSource
                     .withPosition(player.pos)
                     .withEntity(player)
-                    .withWorld(world)
                     .withSilent()
+
+                if (world != null) {
+                    src = src.withWorld(world)
+                }
+
                 val ret = server.commandManager.execute(src, cmd)
                 if (ret == 0) {
                     MinecraftFsMod.LOGGER.warn("Bad command '$cmd'")
@@ -371,8 +375,13 @@ class Executor(private val responseBuilder: FlatBufferBuilder) {
     }
 
     private fun getTargetWorld(command: Command): ServerWorld {
-        val dim = command.targetWorld ?: throw MissingTargetException()
-        return resolveWorld(dim) ?: throw IllegalArgumentException("world not found")
+        return getTargetWorldOpt(command) ?: throw MissingTargetException()
+    }
+
+    private fun getTargetWorldOpt(command: Command): ServerWorld? {
+        return command.targetWorld?.let { dim ->
+            resolveWorld(dim) ?: throw IllegalArgumentException("world not found")
+        }
     }
 
     private fun getTargetBlockPos(command: Command): BlockPos {
