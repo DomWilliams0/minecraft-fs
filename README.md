@@ -2,6 +2,7 @@
 
 [![Build](https://github.com/DomWilliams0/minecraft-fs/actions/workflows/build.yml/badge.svg)](https://github.com/DomWilliams0/minecraft-fs/actions/workflows/build.yml)
 [![Lines](https://tokei.rs/b1/github/DomWilliams0/minecraft-fs)](https://github.com/XAMPPRocky/tokei)
+[![Version](https://img.shields.io/badge/minecraft%20version-1.18.2-blue)]
 
 A FUSE filesystem for querying and controlling Minecraft, as a universal mod platform (but mainly
 for fun).
@@ -35,9 +36,6 @@ For fun, to learn about FUSE, but most importantly - why not?
 ## Setting health
 <img src=".gifs/health.gif" />
 
-## Controlling the time
-<img src=".gifs/world-time.gif" />
-
 ## Setting blocks
 <img src=".gifs/set-block.gif" />
 
@@ -56,12 +54,29 @@ print(f"{player.name} is at {player.position}")
 player.kill()
 ```
 
+# Installation
+
+* Download [latest release](https://github.com/DomWilliams0/minecraft-fs), or build it yourself
+    * Build FUSE filesystem with `cargo build --bin minecraft-fs --release`
+    * Build Minecraft mod with `cd plugin; ./gradlew build`, which will build the jar file to
+        `build/libs`
+* Install Minecraft mod
+    * Client version: **1.18.2**
+    * Dependencies: [Fabric Loader](https://fabricmc.net/use/installer/),
+[Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api) and
+[Fabric Language Kotlin](https://www.curseforge.com/minecraft/mc-mods/fabric-language-kotlin)
+    * Install MCFS via mod manager/putting mod jar in `mods/`
+
+
 # Usage
 
-Once installed (see below), start Minecraft and join a **single player** world. There's currently no
-support for multiplayer worlds.
+* Install as above
+* Start Minecraft
+* Mount the FUSE filesystem over an empty directory
+    * `mkdir mnt; ./minecraft-fs ./mnt`
+* Join a **single player** world - there's currently no support for multiplayer
 
-Your `mnt` directory should contain the following:
+Your mountpoint should contain something like the following:
 
 ```bash
 $ cd mnt
@@ -135,11 +150,6 @@ Congratulations, you can now manipulate the game through reading and writing to 
         │   └── ...
         └── time
 ```
-
-# Installation
-
-TODO: download mod jar and mcfuse binary from github actions, install fabric mod, run game, start
-mcfuse and specify mnt directory
 
 # TODOs
 
