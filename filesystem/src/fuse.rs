@@ -157,10 +157,8 @@ impl fuser::Filesystem for MinecraftFs {
         };
 
         let (cmd, resp) = match file.behaviour() {
-            Some(FileBehaviour::ReadOnly(cmd, resp) | FileBehaviour::ReadWrite(cmd, resp)) => {
-                (cmd, resp)
-            }
-            Some(FileBehaviour::Static(msg) | FileBehaviour::CommandProxy { readme: msg, .. }) => {
+            FileBehaviour::ReadOnly(cmd, resp) | FileBehaviour::ReadWrite(cmd, resp) => (cmd, resp),
+            FileBehaviour::Static(msg) | FileBehaviour::CommandProxy { readme: msg, .. } => {
                 let msg = msg.as_bytes();
                 let start = offset as usize;
                 let end = (start + size as usize).min(msg.len());
@@ -218,13 +216,13 @@ impl fuser::Filesystem for MinecraftFs {
         };
 
         let (cmd, body_type, data_to_send) = match file.behaviour() {
-            Some(FileBehaviour::WriteOnly(cmd, body) | FileBehaviour::ReadWrite(cmd, body)) => {
+            FileBehaviour::WriteOnly(cmd, body) | FileBehaviour::ReadWrite(cmd, body) => {
                 (*cmd, *body, Cow::Borrowed(data))
             }
-            Some(FileBehaviour::CommandProxy {
+            FileBehaviour::CommandProxy {
                 produce_cmd_fn: write,
                 ..
-            }) => {
+            } => {
                 // must be utf8
                 let input_str = match std::str::from_utf8(data) {
                     Ok(s) => s,

@@ -28,9 +28,8 @@ pub struct DirEntry {
     filter: Option<DirFilterFn>,
 }
 
-#[derive(Default)]
 pub struct FileEntry {
-    behaviour: Option<FileBehaviour>,
+    behaviour: FileBehaviour,
     associated_data: Option<EntryAssociatedData>,
     filter: Option<FileFilterFn>,
 }
@@ -44,7 +43,6 @@ pub struct LinkEntry {
 #[derive(Default)]
 pub struct DirEntryBuilder(DirEntry);
 
-#[derive(Default)]
 pub struct FileEntryBuilder(FileEntry);
 
 pub struct LinkEntryBuilder(LinkEntry);
@@ -67,11 +65,6 @@ impl Entry {
 }
 
 impl FileEntryBuilder {
-    pub fn behaviour(mut self, behaviour: FileBehaviour) -> Self {
-        self.0.behaviour = Some(behaviour);
-        self
-    }
-
     /// Overrides parent directory
     #[allow(dead_code)]
     pub fn associated_data(mut self, data: EntryAssociatedData) -> Self {
@@ -90,12 +83,16 @@ impl FileEntryBuilder {
 }
 
 impl FileEntry {
-    pub fn build() -> FileEntryBuilder {
-        FileEntryBuilder::default()
+    pub fn build(behaviour: FileBehaviour) -> FileEntryBuilder {
+        FileEntryBuilder(FileEntry {
+            behaviour,
+            associated_data: None,
+            filter: None,
+        })
     }
 
-    pub fn behaviour(&self) -> Option<&FileBehaviour> {
-        self.behaviour.as_ref()
+    pub fn behaviour(&self) -> &FileBehaviour {
+        &self.behaviour
     }
 
     pub fn associated_data(&self) -> Option<EntryAssociatedData> {
@@ -403,18 +400,16 @@ mod entry_impls {
 
         #[test]
         fn file_entry_comparison() {
-            let a = FileEntry::build()
-                .behaviour(FileBehaviour::ReadWrite(
-                    CommandType::EntityHealth,
-                    BodyType::Float,
-                ))
-                .finish();
-            let b = FileEntry::build()
-                .behaviour(FileBehaviour::ReadWrite(
-                    CommandType::EntityHealth,
-                    BodyType::Float,
-                ))
-                .finish();
+            let a = FileEntry::build(FileBehaviour::ReadWrite(
+                CommandType::EntityHealth,
+                BodyType::Float,
+            ))
+            .finish();
+            let b = FileEntry::build(FileBehaviour::ReadWrite(
+                CommandType::EntityHealth,
+                BodyType::Float,
+            ))
+            .finish();
             assert_eq!(a, b);
         }
 

@@ -27,18 +27,16 @@ pub fn create_structure() -> FilesystemStructure {
     builder.add_entry(
         builder.root(),
         "version",
-        FileEntry::build()
-            .behaviour(FileBehaviour::Static(Cow::Borrowed(env!(
-                "CARGO_PKG_VERSION"
-            ))))
-            .finish(),
+        FileEntry::build(FileBehaviour::Static(Cow::Borrowed(env!(
+            "CARGO_PKG_VERSION"
+        ))))
+        .finish(),
     );
 
     builder.add_entry(
         builder.root(),
         "command",
-        FileEntry::build()
-            .behaviour(FileBehaviour::WriteOnly(CommandType::ServerCommand, String))
+        FileEntry::build(FileBehaviour::WriteOnly(CommandType::ServerCommand, String))
             .filter(filter_in_game)
             .finish(),
     );
@@ -65,28 +63,24 @@ fn player_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
     builder.add_entry(
         dir,
         "name",
-        FileEntry::build()
-            .behaviour(FileBehaviour::ReadOnly(CommandType::PlayerName, String))
-            .finish(),
+        FileEntry::build(FileBehaviour::ReadOnly(CommandType::PlayerName, String)).finish(),
     );
 
     builder.add_entry(
         dir,
         "gamemode",
-        FileEntry::build()
-            .behaviour(FileBehaviour::ReadWrite(
-                CommandType::PlayerGamemode,
-                String,
-            ))
-            .filter(filter_in_game)
-            .finish(),
+        FileEntry::build(FileBehaviour::ReadWrite(
+            CommandType::PlayerGamemode,
+            String,
+        ))
+        .filter(filter_in_game)
+        .finish(),
     );
 
     builder.add_entry(
         dir,
         "hunger",
-        FileEntry::build()
-            .behaviour(FileBehaviour::ReadWrite(CommandType::PlayerHunger, Integer))
+        FileEntry::build(FileBehaviour::ReadWrite(CommandType::PlayerHunger, Integer))
             .filter(filter_in_game)
             .finish(),
     );
@@ -94,24 +88,22 @@ fn player_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
     builder.add_entry(
         dir,
         "saturation",
-        FileEntry::build()
-            .behaviour(FileBehaviour::ReadWrite(
-                CommandType::PlayerSaturation,
-                Float,
-            ))
-            .filter(filter_in_game)
-            .finish(),
+        FileEntry::build(FileBehaviour::ReadWrite(
+            CommandType::PlayerSaturation,
+            Float,
+        ))
+        .filter(filter_in_game)
+        .finish(),
     );
     builder.add_entry(
         dir,
         "exhaustion",
-        FileEntry::build()
-            .behaviour(FileBehaviour::ReadWrite(
-                CommandType::PlayerExhaustion,
-                Float,
-            ))
-            .filter(filter_in_game)
-            .finish(),
+        FileEntry::build(FileBehaviour::ReadWrite(
+            CommandType::PlayerExhaustion,
+            Float,
+        ))
+        .filter(filter_in_game)
+        .finish(),
     );
 
     builder.add_entry(
@@ -156,34 +148,31 @@ fn player_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
     builder.add_entry(
         control,
         "say",
-        FileEntry::build()
-            .behaviour(FileBehaviour::WriteOnly(
-                CommandType::ControlSay,
-                BodyType::String,
-            ))
-            .finish(),
+        FileEntry::build(FileBehaviour::WriteOnly(
+            CommandType::ControlSay,
+            BodyType::String,
+        ))
+        .finish(),
     );
 
     builder.add_entry(
         control,
         "jump",
-        FileEntry::build()
-            .behaviour(FileBehaviour::WriteOnly(
-                CommandType::ControlJump,
-                BodyType::String,
-            ))
-            .finish(),
+        FileEntry::build(FileBehaviour::WriteOnly(
+            CommandType::ControlJump,
+            BodyType::String,
+        ))
+        .finish(),
     );
 
     builder.add_entry(
         control,
         "move",
-        FileEntry::build()
-            .behaviour(FileBehaviour::WriteOnly(
-                CommandType::ControlMove,
-                BodyType::Position,
-            ))
-            .finish(),
+        FileEntry::build(FileBehaviour::WriteOnly(
+            CommandType::ControlMove,
+            BodyType::Position,
+        ))
+        .finish(),
     );
 
     dir
@@ -224,20 +213,18 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
         builder.add_entry(
             world,
             "time",
-            FileEntry::build()
-                .behaviour(FileBehaviour::ReadWrite(CommandType::WorldTime, Integer))
-                .finish(),
+            FileEntry::build(FileBehaviour::ReadWrite(CommandType::WorldTime, Integer)).finish(),
         );
 
         let blocks_dir = builder.add_entry(world, "blocks", DirEntry::default());
         builder.add_entry(
             blocks_dir,
             "README",
-            FileEntry::build()
-                .behaviour(FileBehaviour::Static(
-                    "Path format is ./x,y,z or ./x\\ y\\ z\ne.g. 0,64,100 or \"0.5 22.3 41.5555\"\n".into(),
-                ))
-                .finish(),
+            FileEntry::build(FileBehaviour::Static(
+                "Path format is ./x,y,z or ./x\\ y\\ z\ne.g. 0,64,100 or \"0.5 22.3 41.5555\"\n"
+                    .into(),
+            ))
+            .finish(),
         );
 
         let parse_pos = |name: &str| {
@@ -257,21 +244,19 @@ fn worlds_dir(builder: &mut FilesystemStructureBuilder) -> u64 {
 
                 reg.add_root_entry(
                     "type",
-                    FileEntry::build()
-                        .behaviour(FileBehaviour::ReadWrite(
-                            CommandType::BlockType,
-                            BodyType::String,
-                        ))
-                        .finish(),
+                    FileEntry::build(FileBehaviour::ReadWrite(
+                        CommandType::BlockType,
+                        BodyType::String,
+                    ))
+                    .finish(),
                 );
 
                 reg.add_root_entry(
                     "pos",
-                    FileEntry::build()
-                        .behaviour(FileBehaviour::Static(
-                            format!("{},{},{}", pos.x(), pos.y(), pos.z()).into(),
-                        ))
-                        .finish(),
+                    FileEntry::build(FileBehaviour::Static(
+                        format!("{},{},{}", pos.x(), pos.y(), pos.z()).into(),
+                    ))
+                    .finish(),
                 );
 
                 let neighbours_dir = reg.add_root_entry("adjacent", DirEntry::default());
@@ -343,29 +328,28 @@ fn entities_dir(builder: &mut FilesystemStructureBuilder, root: u64) -> u64 {
     builder.add_entry(
         dir,
         "spawn",
-        FileEntry::build()
-            .behaviour(FileBehaviour::CommandProxy {
-                readme: r#"Spawn an entity at a position with optional NBT tags.
+        FileEntry::build(FileBehaviour::CommandProxy {
+            readme: r#"Spawn an entity at a position with optional NBT tags.
 Accepts same position as /summon command (e.g. ~20 100 ~5).
 Format: "[entity type]\n[position]\n<nbt>"
 Examples:
    pig\n100 20 50\n
    chicken\n20.0 64.5 100.0\n
    creeper\n0,64,0\n{powered:1b,CustomName:'{"text":"Powered Creeper"}'}"#
-                    .into(),
-                produce_cmd_fn: (|input| {
-                    let (entity_ty, pos, nbt) = {
-                        let mut lines = input.lines();
-                        let entity_ty = lines.next()?; // required
-                        let pos = lines.next()?; // required, let the server parse it
-                        let nbt = lines.next().unwrap_or_default(); // optional
-                        (entity_ty, pos, nbt)
-                    };
+                .into(),
+            produce_cmd_fn: (|input| {
+                let (entity_ty, pos, nbt) = {
+                    let mut lines = input.lines();
+                    let entity_ty = lines.next()?; // required
+                    let pos = lines.next()?; // required, let the server parse it
+                    let nbt = lines.next().unwrap_or_default(); // optional
+                    (entity_ty, pos, nbt)
+                };
 
-                    Some(format!("summon {entity_ty} {pos} {nbt}"))
-                }),
-            })
-            .finish(),
+                Some(format!("summon {entity_ty} {pos} {nbt}"))
+            }),
+        })
+        .finish(),
     );
 
     dir
@@ -375,16 +359,14 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, ty: Entity
     reg.add_entry(
         entity_dir,
         "health",
-        FileEntry::build()
-            .behaviour(ReadWrite(CommandType::EntityHealth, Float))
+        FileEntry::build(ReadWrite(CommandType::EntityHealth, Float))
             .filter(filter_in_game)
             .finish(),
     );
     reg.add_entry(
         entity_dir,
         "position",
-        FileEntry::build()
-            .behaviour(ReadWrite(CommandType::EntityPosition, Position))
+        FileEntry::build(ReadWrite(CommandType::EntityPosition, Position))
             .filter(filter_in_game)
             .finish(),
     );
@@ -392,8 +374,7 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, ty: Entity
     reg.add_entry(
         entity_dir,
         "target",
-        FileEntry::build()
-            .behaviour(WriteOnly(CommandType::EntityTarget, Position))
+        FileEntry::build(WriteOnly(CommandType::EntityTarget, Position))
             .filter(filter_in_game)
             .finish(),
     );
@@ -402,8 +383,7 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, ty: Entity
         reg.add_entry(
             entity_dir,
             "type",
-            FileEntry::build()
-                .behaviour(ReadOnly(CommandType::EntityType, String))
+            FileEntry::build(ReadOnly(CommandType::EntityType, String))
                 .filter(filter_in_game)
                 .finish(),
         );
@@ -412,8 +392,7 @@ fn mk_entity_dir(reg: &mut DynamicDirRegistrationer, entity_dir: u64, ty: Entity
             reg.add_entry(
                 entity_dir,
                 "living",
-                FileEntry::build()
-                    .behaviour(FileBehaviour::ForShow)
+                FileEntry::build(FileBehaviour::ForShow)
                     .filter(filter_in_game)
                     .finish(),
             );
