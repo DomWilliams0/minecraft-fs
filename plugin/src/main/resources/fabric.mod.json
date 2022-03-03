@@ -8,8 +8,12 @@
   "authors": [
     "Dom Williams"
   ],
+  "contact": {
+    "homepage": "https://github.com/DomWilliams0/minecraft-fs",
+    "sources": "https://github.com/DomWilliams0/minecraft-fs"
+  },
 
-  "license": "MIT",
+  "license": "GPL-3.0-only",
 
   "environment": "*",
   "entrypoints": {
