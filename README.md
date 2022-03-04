@@ -1,7 +1,7 @@
 # minecraft-fs
 
 [![Build](https://github.com/DomWilliams0/minecraft-fs/actions/workflows/build.yml/badge.svg)](https://github.com/DomWilliams0/minecraft-fs/actions/workflows/build.yml)
-![Version](https://img.shields.io/badge/version-1.0-brightgreen)
+![Version](https://img.shields.io/badge/version-1.0.0-brightgreen)
 ![MC Version](https://img.shields.io/badge/minecraft-1.18.2-blue)
 [![Lines](https://tokei.rs/b1/github/DomWilliams0/minecraft-fs)](https://github.com/XAMPPRocky/tokei)
 

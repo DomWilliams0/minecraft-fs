@@ -98,7 +98,7 @@ dependencies = [
 
 [[package]]
 name = "filesystem"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "ctrlc",
  "derivative",
@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "ipc"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "flatbuffers",
  "log",
@@ -254,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "minecraft-fs"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "env_logger",
  "filesystem",
@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "test-client"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "env_logger",
  "flatbuffers",
