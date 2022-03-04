@@ -1,8 +1,9 @@
 # minecraft-fs
 
 [![Build](https://github.com/DomWilliams0/minecraft-fs/actions/workflows/build.yml/badge.svg)](https://github.com/DomWilliams0/minecraft-fs/actions/workflows/build.yml)
+![Version](https://img.shields.io/badge/version-1.0-brightgreen)
+![MC Version](https://img.shields.io/badge/minecraft-1.18.2-blue)
 [![Lines](https://tokei.rs/b1/github/DomWilliams0/minecraft-fs)](https://github.com/XAMPPRocky/tokei)
-![Version](https://img.shields.io/badge/minecraft%20version-1.18.2-blue)
 
 A FUSE filesystem for querying and controlling Minecraft, as a universal mod platform (but mainly
 for fun).
@@ -10,6 +11,11 @@ for fun).
 *Warning: don't get your hopes too high, this is still WIP!*
 
 * * *
+
+* [Examples GIFs](#examples)
+* [Installation](#installation)
+* [Usage](#usage)
+* [Directory structure](#structure)
 
 
 # What?
@@ -22,7 +28,7 @@ languages like bash and Python without needing to touch Java, gradle or Fabric.
 
 For fun, to learn about FUSE, but most importantly - why not?
 
-# Examples
+# Examples <a id="examples"/>
 
 ## Controlling the player
 <img src=".gifs/control.gif" />
@@ -54,7 +60,7 @@ print(f"{player.name} is at {player.position}")
 player.kill()
 ```
 
-# Installation
+# Installation <a id="installation"/>
 
 * Download [latest release](https://github.com/DomWilliams0/minecraft-fs/releases), or build it yourself
     * Build FUSE filesystem with `cargo build --bin minecraft-fs --release`
@@ -68,7 +74,7 @@ player.kill()
     * Install MCFS via mod manager/putting mod jar in `mods/`
 
 
-# Usage
+# Usage <a id="usage"/>
 
 * Install as above
 * Start Minecraft
@@ -94,21 +100,28 @@ lrwxr-xr-x   0 dom 21 Feb 20:27 world -> ../worlds/overworld
 
 Congratulations, you can now manipulate the game through reading and writing to these special files.
 
-## Directory structure
+## Directory structure <a id="structure"/>
 
 ```asm
+; wo=write only, ro=read only, rw=read and write
+├── command       ; wo, executes a command as the player
 ├── player
 │   ├── control    ; all the files here are write-only
 │   │   ├── jump   ; causes the player to jump on any input
 │   │   ├── move   ; applies the given x,y,z force to the player
 │   │   └── say    ; makes the player chat
+│   ├── health     ; rw, the player's health
+│   ├── name       ; ro, the player's name
+│   ├── position   ; rw, the player's position
+│   ├── gamemode   ; rw, the player's gamemode
+│   ├── hunger     ; rw, the player's hunger
+│   ├── exhaustion ; rw, the player's exhaustion
+│   ├── saturation ; rw, the player's food saturation
+│   ├── target     ; wo, a position to look at
 │   ├── entity -> world/entities/by-id/135  ; symlink to player entity
-│   ├── health    ; rw, the player's health
-│   ├── name      ; ro, the player's name
-│   ├── position  ; rw, the player's position
 │   └── world -> ../worlds/overworld  ; symlink to player world
 └── worlds
-    ├── end
+    ├── overworld
     │   ├── blocks
     │   │   ├── 100,64,250
     │   │   │   ├── adjacent  ; dir of symlinks to adjacent blocks
@@ -124,26 +137,29 @@ Congratulations, you can now manipulate the game through reading and writing to 
     │   │   │   └── ...
     │   │   └── README  ; ro, explains the dir structure
     │   ├── entities
-    │   │   └── by-id
-    │   │       ├── 107  ; entity id
-    │   │       │   ├── health     ; rw, the entity's health
-    │   │       │   ├── living     ; inaccessible, present if living
-    │   │       │   ├── position   ; rw, the entity's position
-    │   │       │   └── type       ; ro, the entity's type
-    │   │       ├── 108
-    │   │       │   ├── health
-    │   │       │   ├── living
-    │   │       │   ├── position
-    │   │       │   └── type
-    │   │       ...
-    │   └── time  ; rw, the world's time
+    │   │   ├── by-id
+    │   │   │   ├── 107  ; entity id
+    │   │   │   │   ├── health     ; rw, the entity's health (if living)
+    │   │   │   │   ├── living     ; inaccessible, exists to indicate living
+    │   │   │   │   ├── position   ; rw, the entity's position
+    │   │   │   │   ├── target     ; wo, a position to look at
+    │   │   │   │   └── type       ; ro, the entity's type
+    │   │   │   ├── 108
+    │   │   │   │   ├── health
+    │   │   │   │   ├── living
+    │   │   │   │   ├── position
+    │   │   │   │   ├── target
+    │   │   │   │   └── type
+    │   │   │   ...
+    │   │   └── spawn ; rw, spawns an entity, read file for help
+    │   └── time      ; rw, the world's time
     ├── nether
     │   ├── blocks
     │   │   └── ...
     │   ├── entities
     │   │   └── ...
     │   └── time
-    └── overworld
+    └── end
         ├── blocks
         │   └── ...
         ├── entities
