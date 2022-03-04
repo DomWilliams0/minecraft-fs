@@ -56,10 +56,49 @@ jobs:
         run: cargo test --workspace
 
       - name: Build
-        run: cargo build --bin minecraft-fs --release
+        run: |
+          cargo build --bin minecraft-fs --release
+          strip target/release/minecraft-fs
+          chmod +x target/release/minecraft-fs
 
       - name: Capture build artifact
         uses: actions/upload-artifact@v2
         with:
           name: FUSE
-          path: target/release/mcfuse
+          path: target/release/minecraft-fs
+
+  create_release:
+    name: Create release
+    runs-on: ubuntu-20.04
+    needs: [build_fuse, build_plugin]
+    if: contains(github.event.head_commit.message, 'make_release') && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master')
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: download
+      - name: Tar up artifacts
+        run: |
+          mkdir dist
+          mv download/FUSE/minecraft-fs dist
+          mv download/Mod/*jar dist
+          tar -C dist -cvzf minecraft-fs.tar.gz .
+      - name: Create release
+        id: do_create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: "${{ github.ref }}"
+          release_name: "Release ${{ github.ref }}, build ${{ github.run_number }}"
+          prerelease: true
+          draft: true # draft by default to be manually published if it's exciting
+      - name: Upload artifacts to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.do_create_release.outputs.upload_url }}
+          asset_path: minecraft-fs.tar.gz
+          asset_name: minecraft-fs.tar.gz
+          asset_content_type: application/gzip
