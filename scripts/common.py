@@ -202,6 +202,8 @@ class EntityProxy:
         return self._mc._exists(path)
 
     def teleport(self, target: Position):
+        if isinstance(target, tuple):
+            target = Position(*target)
         self.position = target
 
     def kill(self):
