@@ -6,7 +6,8 @@
 [![Lines](https://tokei.rs/b1/github/DomWilliams0/minecraft-fs)](https://github.com/XAMPPRocky/tokei)
 
 A FUSE filesystem for querying and controlling Minecraft, as a universal mod platform (but mainly
-for fun).
+for fun). A blog post covering the technical details [can be found
+here](https://domwillia.ms/minecraft-fs).
 
 *Warning: don't get your hopes too high, this is still WIP!*
 
